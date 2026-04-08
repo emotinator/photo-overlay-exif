@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Photo Overlay — EXIF</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,300,0,0" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e0f;
+    --surface: #161618;
+    --surface2: #1e1e21;
+    --surface3: #252529;
+    --border: #2e2e33;
+    --border2: #3a3a40;
+    --text: #e8e8ea;
+    --text2: #9898a6;
+    --text3: #5a5a6a;
+    --accent: #c8a96e;
+    --accent2: #e8c98e;
+    --accent-dim: rgba(200,169,110,0.12);
+    --red: #e06060;
+    --green: #6ec88a;
+    --radius: 6px;
+    --panel: 420px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; height: 58px; border-bottom: 1px solid var(--border);
+    background: var(--surface); flex-shrink: 0; z-index: 10;
+  }
+  .logo { font-family: 'Instrument Serif', serif; font-size: 24px; color: var(--accent); letter-spacing: 0.02em; }
+  .logo span { color: var(--text3); font-style: italic; font-size: 15px; margin-left: 8px; font-family: 'DM Mono', monospace; }
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+
+  .app-body { display: flex; flex: 1; overflow: hidden; }
+
+  .sidebar {
+    width: var(--panel); background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
+  }
+  .sidebar-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .tab-btn {
+    flex: 1; padding: 14px 6px; background: none; border: none; color: var(--text3);
+    font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.09em;
+    text-transform: uppercase; cursor: pointer; transition: all 0.15s;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-btn:hover:not(.active) { color: var(--text2); }
+  .tab-panel { display: none; flex-direction: column; overflow-y: auto; flex: 1; }
+  .tab-panel.active { display: flex; }
+  .tab-panel::-webkit-scrollbar { width: 4px; }
+  .tab-panel::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .section { padding: 18px 20px; border-bottom: 1px solid var(--border); }
+  .section-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--text3); margin-bottom: 14px; display: flex; align-items: center; gap: 6px;
+  }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .drop-zone {
+    border: 1.5px dashed var(--border2); border-radius: var(--radius); padding: 28px 18px;
+    text-align: center; cursor: pointer; transition: all 0.2s; background: var(--surface2); position: relative;
+  }
+  .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); background: var(--accent-dim); }
+  .drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-icon { font-size: 30px; margin-bottom: 8px; opacity: 0.35; }
+  .drop-text { font-size: 14px; color: var(--text3); line-height: 1.6; }
+  .drop-text strong { color: var(--accent); font-weight: 600; }
+
+  .crop-toggle { display: flex; gap: 6px; }
+  .crop-btn {
+    flex: 1; padding: 10px 6px; border: 1.5px solid var(--border2); border-radius: var(--radius);
+    background: var(--surface2); color: var(--text2); font-family: 'DM Mono', monospace;
+    font-size: 14px; cursor: pointer; transition: all 0.15s; text-align: center;
+  }
+  .crop-btn.active { border-color: var(--accent); background: var(--accent-dim); color: var(--accent); }
+  .crop-btn:hover:not(.active) { color: var(--text); }
+
+  .slider-row { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; }
+  .slider-row:last-child { margin-bottom: 0; }
+  .slider-label { font-size: 13px; color: var(--text2); width: 80px; flex-shrink: 0; font-family: 'DM Mono', monospace; }
+  .slider-val { font-size: 13px; color: var(--accent); width: 44px; text-align: right; font-family: 'DM Mono', monospace; flex-shrink: 0; }
+  input[type=range] { flex: 1; -webkit-appearance: none; height: 4px; background: var(--border2); border-radius: 2px; outline: none; cursor: pointer; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; transition: transform 0.1s; }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
+
+  .field-row { margin-bottom: 12px; }
+  .field-row:last-child { margin-bottom: 0; }
+  .field-label { font-size: 11px; color: var(--text3); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 5px; }
+  input[type=text], textarea {
+    width: 100%; background: var(--surface2); border: 1.5px solid var(--border);
+    border-radius: var(--radius); color: var(--text); font-family: 'DM Mono', monospace;
+    font-size: 14px; padding: 9px 11px; outline: none; transition: border-color 0.15s; resize: none;
+  }
+  input[type=text]:focus, textarea:focus { border-color: var(--accent); }
+  input[type=text]::placeholder, textarea::placeholder { color: var(--text3); }
+
+  .exif-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .exif-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; }
+  .exif-item-label { font-size: 10px; color: var(--text3); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 3px; }
+  .exif-item-val { font-size: 13px; color: var(--accent2); font-family: 'DM Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .exif-item.full { grid-column: 1 / -1; }
+
+  .preset-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; max-height: 160px; overflow-y: auto; }
+  .preset-list::-webkit-scrollbar { width: 4px; }
+  .preset-list::-webkit-scrollbar-thumb { background: var(--border2); }
+  .preset-item { display: flex; align-items: center; gap: 7px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 8px 11px; }
+  .preset-name { flex: 1; font-size: 12px; color: var(--text2); font-family: 'DM Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .preset-use { font-size: 11px; color: var(--accent); background: var(--accent-dim); border: 1px solid var(--accent); border-radius: 3px; padding: 3px 7px; cursor: pointer; font-family: 'Syne', sans-serif; font-weight: 700; transition: all 0.15s; white-space: nowrap; }
+  .preset-use:hover { background: var(--accent); color: #000; }
+  .preset-del { font-size: 16px; color: var(--text3); cursor: pointer; padding: 0 2px; transition: color 0.15s; background: none; border: none; line-height: 1; }
+  .preset-del:hover { color: var(--red); }
+  .preset-empty { font-size: 13px; color: var(--text3); font-style: italic; padding: 8px 0; font-family: 'DM Mono', monospace; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border-radius: var(--radius); font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; transition: all 0.15s; border: none; white-space: nowrap; }
+  .btn-ghost { background: transparent; border: 1.5px solid var(--border2); color: var(--text2); }
+  .btn-ghost:hover { border-color: var(--text2); color: var(--text); }
+  .btn-ghost:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-ghost:disabled:hover { border-color: var(--border2); color: var(--text2); }
+  .btn-accent { background: var(--accent); color: #0e0e0f; }
+  .btn-accent:hover { background: var(--accent2); }
+  .btn-sm { padding: 8px 13px; font-size: 12px; }
+  .btn-full { width: 100%; }
+  .btn-row { display: flex; gap: 6px; }
+
+  /* ── Canvas Area ── */
+  .canvas-area {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: var(--bg); overflow: hidden; position: relative;
+  }
+
+  /* ── Empty ── */
+  #empty-state { text-align: center; }
+  .empty-icon { font-size: 56px; margin-bottom: 16px; opacity: 0.12; }
+  #empty-state h2 { font-family: 'Instrument Serif', serif; font-size: 26px; color: var(--text3); margin-bottom: 10px; }
+  #empty-state p { font-size: 14px; color: var(--text3); font-family: 'DM Mono', monospace; }
+
+  /* ── Crop Stage ── */
+  #crop-stage { display: none; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; }
+  #crop-stage.active { display: flex; }
+
+  .crop-frame-wrap { position: relative; flex-shrink: 0; }
+  #crop-canvas { display: block; cursor: grab; touch-action: none; background: #000; }
+  #crop-canvas:active { cursor: grabbing; }
+  #crop-grid-canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
+
+  .zoom-pill {
+    position: absolute; bottom: 10px; right: 10px;
+    background: rgba(0,0,0,0.65); border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 20px; padding: 4px 12px;
+    font-size: 13px; font-family: 'DM Mono', monospace; color: var(--text2);
+    pointer-events: none;
+  }
+
+  .crop-hint {
+    margin-top: 13px; font-size: 13px; color: var(--text3); font-family: 'DM Mono', monospace;
+    text-align: center; letter-spacing: 0.03em;
+  }
+  .crop-hint kbd {
+    background: var(--surface3); border: 1px solid var(--border2); border-radius: 3px;
+    padding: 2px 7px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text2);
+  }
+  .crop-actions { display: flex; gap: 10px; margin-top: 16px; }
+
+  /* ── Preview Stage ── */
+  #preview-stage { display: none; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 20px; }
+  #preview-stage.active { display: flex; }
+  canvas#preview { display: block; max-width: 100%; max-height: calc(100vh - 58px - 58px - 48px); object-fit: contain; border-radius: 3px; box-shadow: 0 8px 48px rgba(0,0,0,0.8); }
+  .preview-actions { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
+  .preview-dim { font-size: 13px; color: var(--text3); font-family: 'DM Mono', monospace; margin-right: 6px; }
+
+  /* ── Export Bar ── */
+  .export-bar {
+    height: 58px; flex-shrink: 0; border-top: 1px solid var(--border);
+    background: var(--surface); display: flex; align-items: center;
+    justify-content: flex-end; padding: 0 20px; gap: 8px;
+  }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed; bottom: 70px; right: 20px; background: var(--surface3);
+    border: 1px solid var(--border2); border-radius: 6px; padding: 11px 16px;
+    font-size: 13px; font-family: 'DM Mono', monospace; color: var(--text);
+    opacity: 0; transform: translateY(8px); transition: all 0.2s; pointer-events: none; z-index: 200;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.success { border-color: var(--green); color: var(--green); }
+  .toast.error { border-color: var(--red); color: var(--red); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Photo Overlay <span>EXIF</span></div>
+  <div class="header-actions">
+    <button class="btn btn-ghost btn-sm" onclick="exportSettings('json')">↓ .json</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportSettings('md')">↓ .md</button>
+  </div>
+</header>
+
+<div class="app-body">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-tabs">
+      <button class="tab-btn active" onclick="switchTab('image')">Image</button>
+      <button class="tab-btn" onclick="switchTab('overlay')">Overlay</button>
+      <button class="tab-btn" onclick="switchTab('profile')">Profile</button>
+    </div>
+
+    <!-- IMAGE TAB -->
+    <div class="tab-panel active" id="tab-image">
+      <div class="section">
+        <div class="section-label">Load Image</div>
+        <div class="drop-zone" id="drop-zone">
+          <input type="file" id="file-input" accept="image/*">
+          <div class="drop-icon">⬆</div>
+          <div class="drop-text"><strong>Click or drag & drop</strong><br>JPEG · PNG · TIFF · HEIC</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-label">Aspect Ratio</div>
+        <div class="crop-toggle">
+          <button class="crop-btn active" onclick="setCropRatio('4:5',this)">4 : 5</button>
+          <button class="crop-btn" onclick="setCropRatio('1:1',this)">1 : 1</button>
+          <button class="crop-btn" onclick="setCropRatio('original',this)">Original</button>
+        </div>
+        <div style="margin-top:10px;">
+          <button class="btn btn-ghost btn-sm btn-full" id="recrop-btn" onclick="enterCropMode()" disabled>✂ Adjust Crop</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-label">Image Effects</div>
+        <div class="slider-row">
+          <span class="slider-label">Blur</span>
+          <input type="range" id="blur-slider" min="0" max="30" value="8" oninput="updateSlider('blur',this,'px')">
+          <span class="slider-val" id="blur-val">8px</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Darken</span>
+          <input type="range" id="darken-slider" min="0" max="85" value="35" oninput="updateSlider('darken',this,'%')">
+          <span class="slider-val" id="darken-val">35%</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-label">EXIF Data</div>
+        <div class="exif-grid">
+          <div class="exif-item"><div class="exif-item-label">Aperture</div><div class="exif-item-val" id="ex-aperture">—</div></div>
+          <div class="exif-item"><div class="exif-item-label">Shutter</div><div class="exif-item-val" id="ex-shutter">—</div></div>
+          <div class="exif-item"><div class="exif-item-label">ISO</div><div class="exif-item-val" id="ex-iso">—</div></div>
+          <div class="exif-item"><div class="exif-item-label">Focal</div><div class="exif-item-val" id="ex-focal">—</div></div>
+          <div class="exif-item full"><div class="exif-item-label">Camera</div><div class="exif-item-val" id="ex-camera">—</div></div>
+          <div class="exif-item full"><div class="exif-item-label">Lens</div><div class="exif-item-val" id="ex-lens">—</div></div>
+          <div class="exif-item full"><div class="exif-item-label">Date / Time</div><div class="exif-item-val" id="ex-date">—</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OVERLAY TAB -->
+    <div class="tab-panel" id="tab-overlay">
+      <div class="section">
+        <div class="section-label">Lighting Notes</div>
+        <textarea id="lighting-notes" rows="5" placeholder="e.g. Flashpoint Xplor 400 in a 48&quot; Glow EZ Lock Deep Parabolic Softbox, double diffusion above right..."></textarea>
+        <div class="btn-row" style="margin-top:8px;">
+          <button class="btn btn-ghost btn-sm btn-full" onclick="saveLightingPreset()">+ Save as Preset</button>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-label">Lighting Presets</div>
+        <div class="preset-list" id="preset-list"><div class="preset-empty">No presets saved yet</div></div>
+      </div>
+      <div class="section">
+        <div class="section-label">Text Position</div>
+        <div class="slider-row">
+          <span class="slider-label">Margins</span>
+          <input type="range" id="margin-slider" min="2" max="20" value="6" oninput="updateSlider('marginPct',this,'%')">
+          <span class="slider-val" id="marginPct-val">6%</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Text Width</span>
+          <input type="range" id="textwidth-slider" min="35" max="100" value="55" oninput="updateSlider('textWidthPct',this,'%')">
+          <span class="slider-val" id="textWidthPct-val">55%</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">V. Offset</span>
+          <input type="range" id="voffset-slider" min="-30" max="30" value="0" oninput="updateSlider('vOffsetPct',this,'%')">
+          <span class="slider-val" id="vOffsetPct-val">0%</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">H. Offset</span>
+          <input type="range" id="hoffset-slider" min="-40" max="40" value="0" oninput="updateSlider('hOffsetPct',this,'%')">
+          <span class="slider-val" id="hOffsetPct-val">0%</span>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-label">Typography</div>
+        <div class="slider-row">
+          <span class="slider-label">Size Scale</span>
+          <input type="range" id="fontscale-slider" min="60" max="250" value="150" oninput="updateSlider('fontScale',this,'%')">
+          <span class="slider-val" id="fontScale-val">150%</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Line Height</span>
+          <input type="range" id="lineheight-slider" min="100" max="200" value="145" oninput="updateSlider('lineHeight',this,'%')">
+          <span class="slider-val" id="lineHeight-val">145%</span>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-label">Text Shadow</div>
+        <div class="field-row">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);">
+            <input type="checkbox" id="shadow-enabled" onchange="updateSlider('shadowEnabled',{value:this.checked?1:0},'')" style="accent-color:var(--accent);">Enable drop shadow
+          </label>
+        </div>
+        <div id="shadow-controls" style="opacity:0.35;pointer-events:none;margin-top:8px;">
+          <div class="slider-row">
+            <span class="slider-label">Blur</span>
+            <input type="range" id="shadow-blur" min="0" max="40" value="12" oninput="updateSlider('shadowBlur',this,'px')">
+            <span class="slider-val" id="shadowBlur-val">12px</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Opacity</span>
+            <input type="range" id="shadow-opacity" min="0" max="100" value="70" oninput="updateSlider('shadowOpacity',this,'%')">
+            <span class="slider-val" id="shadowOpacity-val">70%</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Offset X</span>
+            <input type="range" id="shadow-x" min="-20" max="20" value="0" oninput="updateSlider('shadowX',this,'px')">
+            <span class="slider-val" id="shadowX-val">0px</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Offset Y</span>
+            <input type="range" id="shadow-y" min="-20" max="20" value="2" oninput="updateSlider('shadowY',this,'px')">
+            <span class="slider-val" id="shadowY-val">2px</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROFILE TAB -->
+    <div class="tab-panel" id="tab-profile">
+      <div class="section">
+        <div class="section-label">Photographer Profile</div>
+        <div class="field-row">
+          <div class="field-label">Name</div>
+          <input type="text" id="prof-name" placeholder="e.g. Elmer Erana" oninput="saveProfile()">
+        </div>
+        <div class="field-row">
+          <div class="field-label">Instagram Handle</div>
+          <input type="text" id="prof-instagram" placeholder="e.g. elmererana.portraits" oninput="saveProfile()">
+        </div>
+        <div class="field-row">
+          <div class="field-label">Website</div>
+          <input type="text" id="prof-website" placeholder="e.g. elmererana.com" oninput="saveProfile()">
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-label">Show / Hide Lines</div>
+        <div class="field-row"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);"><input type="checkbox" id="show-copyright" checked onchange="saveSettings();renderOverlay()" style="accent-color:var(--accent);">© Copyright</label></div>
+        <div class="field-row"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);"><input type="checkbox" id="show-instagram" checked onchange="saveSettings();renderOverlay()" style="accent-color:var(--accent);">Instagram</label></div>
+        <div class="field-row"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);"><input type="checkbox" id="show-website" checked onchange="saveSettings();renderOverlay()" style="accent-color:var(--accent);">Website</label></div>
+        <div class="field-row"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);"><input type="checkbox" id="show-datetime" checked onchange="saveSettings();renderOverlay()" style="accent-color:var(--accent);">Date / Time</label></div>
+      </div>
+      <div class="section">
+        <div class="section-label">Divider</div>
+        <div class="slider-row">
+          <span class="slider-label">Opacity</span>
+          <input type="range" id="divider-opacity" min="0" max="100" value="30" oninput="renderOverlay();document.getElementById('div-op-val').textContent=this.value+'%'">
+          <span class="slider-val" id="div-op-val">30%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER -->
+  <div class="canvas-area" id="canvas-area">
+
+    <div id="empty-state">
+      <div class="empty-icon">◫</div>
+      <h2>No image loaded</h2>
+      <p>Load an image from the Image tab</p>
+    </div>
+
+    <!-- CROP STAGE -->
+    <div id="crop-stage">
+      <div class="crop-frame-wrap" id="crop-frame-wrap">
+        <canvas id="crop-canvas"></canvas>
+        <canvas id="crop-grid-canvas"></canvas>
+        <div class="zoom-pill" id="zoom-pill">100%</div>
+      </div>
+      <div class="crop-hint">
+        Drag to pan &nbsp;·&nbsp; <kbd>Scroll</kbd> / pinch to zoom &nbsp;·&nbsp; <kbd>R</kbd> reset
+      </div>
+      <div class="crop-actions">
+        <button class="btn btn-ghost" onclick="cancelCrop()">Cancel</button>
+        <button class="btn btn-accent" onclick="applyCrop()">Apply Crop ✓</button>
+      </div>
+    </div>
+
+    <!-- PREVIEW STAGE -->
+    <div id="preview-stage">
+      <canvas id="preview"></canvas>
+      <div class="preview-actions">
+        <span class="preview-dim" id="preview-dim"></span>
+        <button class="btn btn-ghost btn-sm" onclick="enterCropMode()">✂ Re-crop</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="export-bar">
+  <button class="btn btn-ghost btn-sm" onclick="exportImage('png')">Export PNG</button>
+  <button class="btn btn-accent btn-sm" onclick="exportImage('jpeg')">Export JPEG</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/exifr@7.1.3/dist/full.umd.cjs"></script>
+
+<script>
+// ══════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════
+const S = {
+  imageFile: null,
+  imageBitmap: null,
+  cropRatio: '4:5',
+  // crop transform stored in source-image-pixel space
+  crop: { scale: 1, offsetX: 0, offsetY: 0, outW: 0, outH: 0 },
+  cropApplied: false,
+  blur: 8, darken: 35,
+  marginPct: 6, textWidthPct: 55, vOffsetPct: 0, hOffsetPct: 0,
+  fontScale: 150, lineHeight: 145,
+  shadowEnabled: 0, shadowBlur: 12, shadowOpacity: 70, shadowX: 0, shadowY: 2,
+  exif: {}, lightingNotes: '',
+  presets: [],
+  profile: { name:'', instagram:'', website:'' },
+};
+
+// Crop viewport display metrics
+const CV = { W: 0, H: 0 };
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  loadFromStorage();
+  setupDropZone();
+  document.getElementById('lighting-notes').addEventListener('input', () => {
+    S.lightingNotes = document.getElementById('lighting-notes').value;
+    renderOverlay();
+  });
+  window.addEventListener('keydown', e => {
+    if ((e.key==='r'||e.key==='R') && document.getElementById('crop-stage').classList.contains('active')) {
+      resetCropTransform(); drawCropViewport();
+    }
+  });
+  window.addEventListener('resize', () => {
+    if (document.getElementById('crop-stage').classList.contains('active') && S.imageBitmap) {
+      sizeCropCanvas(); drawCropViewport();
+    }
+  });
+});
+
+// Keys that map directly from saved settings → state → slider/input element id
+const SLIDER_KEYS = [
+  { key:'blur',          id:'blur-slider',        unit:'px', valId:'blur-val'          },
+  { key:'darken',        id:'darken-slider',       unit:'%',  valId:'darken-val'        },
+  { key:'marginPct',     id:'margin-slider',       unit:'%',  valId:'marginPct-val'     },
+  { key:'textWidthPct',  id:'textwidth-slider',    unit:'%',  valId:'textWidthPct-val'  },
+  { key:'vOffsetPct',    id:'voffset-slider',      unit:'%',  valId:'vOffsetPct-val'    },
+  { key:'hOffsetPct',    id:'hoffset-slider',      unit:'%',  valId:'hOffsetPct-val'    },
+  { key:'fontScale',     id:'fontscale-slider',    unit:'%',  valId:'fontScale-val'     },
+  { key:'lineHeight',    id:'lineheight-slider',   unit:'%',  valId:'lineHeight-val'    },
+  { key:'shadowBlur',    id:'shadow-blur',         unit:'px', valId:'shadowBlur-val'    },
+  { key:'shadowOpacity', id:'shadow-opacity',      unit:'%',  valId:'shadowOpacity-val' },
+  { key:'shadowX',       id:'shadow-x',            unit:'px', valId:'shadowX-val'       },
+  { key:'shadowY',       id:'shadow-y',            unit:'px', valId:'shadowY-val'       },
+  { key:'dividerOpacity',id:'divider-opacity',     unit:'%',  valId:'div-op-val'        },
+];
+
+const CHECKBOX_KEYS = [
+  { key:'showCopyright', id:'show-copyright' },
+  { key:'showInstagram', id:'show-instagram' },
+  { key:'showWebsite',   id:'show-website'   },
+  { key:'showDatetime',  id:'show-datetime'  },
+  { key:'shadowEnabled', id:'shadow-enabled' },
+];
+
+function saveSettings() {
+  const settings = {
+    profile:       S.profile,
+    cropRatio:     S.cropRatio,
+    blur:          S.blur,
+    darken:        S.darken,
+    marginPct:     S.marginPct,
+    textWidthPct:  S.textWidthPct,
+    vOffsetPct:    S.vOffsetPct,
+    hOffsetPct:    S.hOffsetPct,
+    fontScale:     S.fontScale,
+    lineHeight:    S.lineHeight,
+    shadowEnabled: S.shadowEnabled,
+    shadowBlur:    S.shadowBlur,
+    shadowOpacity: S.shadowOpacity,
+    shadowX:       S.shadowX,
+    shadowY:       S.shadowY,
+    showCopyright: document.getElementById('show-copyright').checked,
+    showInstagram: document.getElementById('show-instagram').checked,
+    showWebsite:   document.getElementById('show-website').checked,
+    showDatetime:  document.getElementById('show-datetime').checked,
+    dividerOpacity: parseInt(document.getElementById('divider-opacity').value),
+  };
+  localStorage.setItem('framedata-settings', JSON.stringify(settings));
+  localStorage.setItem('framedata-presets', JSON.stringify(S.presets));
+}
+
+function loadFromStorage() {
+  try {
+    S.presets = JSON.parse(localStorage.getItem('framedata-presets') || '[]');
+    renderPresets();
+
+    const saved = JSON.parse(localStorage.getItem('framedata-settings') || '{}');
+    if (!Object.keys(saved).length) return;
+
+    // Profile
+    const p = saved.profile || {};
+    S.profile = { name: p.name||'', instagram: p.instagram||'', website: p.website||'' };
+    document.getElementById('prof-name').value = S.profile.name;
+    document.getElementById('prof-instagram').value = S.profile.instagram;
+    document.getElementById('prof-website').value = S.profile.website;
+
+    // Crop ratio
+    if (saved.cropRatio) {
+      S.cropRatio = saved.cropRatio;
+      document.querySelectorAll('.crop-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.ratio === S.cropRatio ||
+          (S.cropRatio === '4:5' && b.textContent.includes('4')) ||
+          (S.cropRatio === '1:1' && b.textContent.includes('1 : 1')) ||
+          (S.cropRatio === 'original' && b.textContent.includes('Original')));
+      });
+    }
+
+    // Sliders
+    SLIDER_KEYS.forEach(({ key, id, unit, valId }) => {
+      if (saved[key] !== undefined) {
+        S[key] = saved[key];
+        const el = document.getElementById(id);
+        if (el) el.value = saved[key];
+        const ve = document.getElementById(valId);
+        if (ve) ve.textContent = saved[key] + unit;
+      }
+    });
+
+    // Checkboxes
+    CHECKBOX_KEYS.forEach(({ key, id }) => {
+      if (saved[key] !== undefined) {
+        S[key] = saved[key] ? 1 : 0;
+        const el = document.getElementById(id);
+        if (el) el.checked = !!saved[key];
+      }
+    });
+
+    // Shadow controls visibility
+    const shadowPanel = document.getElementById('shadow-controls');
+    if (shadowPanel) {
+      shadowPanel.style.opacity = S.shadowEnabled ? '1' : '0.35';
+      shadowPanel.style.pointerEvents = S.shadowEnabled ? 'all' : 'none';
+    }
+
+  } catch(e) { console.warn('loadFromStorage error:', e); }
+}
+
+// ══════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════
+window.switchTab = tab => {
+  const names = ['image','overlay','profile'];
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', names[i]===tab));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+};
+
+// ══════════════════════════════════════════
+// DROP ZONE / LOAD
+// ══════════════════════════════════════════
+function setupDropZone() {
+  const zone = document.getElementById('drop-zone');
+  const fi   = document.getElementById('file-input');
+  fi.addEventListener('change', e => { if (e.target.files[0]) loadImage(e.target.files[0]); });
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('dragover'); if (e.dataTransfer.files[0]) loadImage(e.dataTransfer.files[0]); });
+}
+
+async function loadImage(file) {
+  S.imageFile = file;
+  try {
+    S.imageBitmap = await createImageBitmap(file);
+    S.cropApplied = false;
+
+    // Parse EXIF using exifr UMD (window.exifr)
+    try {
+      if (window.exifr && typeof window.exifr.parse === 'function') {
+        const exif = await window.exifr.parse(file, {
+          tiff: true, exif: true, gps: false, iptc: false, xmp: false,
+          translateKeys: true, translateValues: true, reviveValues: true,
+        });
+        processExif(exif || {});
+      } else {
+        console.warn('exifr not loaded');
+        clearExif();
+      }
+    } catch (exifErr) {
+      console.warn('EXIF parse failed:', exifErr);
+      clearExif();
+    }
+
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('recrop-btn').disabled = false;
+    enterCropMode();
+    toast('Image loaded — set your crop', 'success');
+  } catch(e) { toast('Could not load image', 'error'); console.error('loadImage:', e); }
+}
+
+// ══════════════════════════════════════════
+// CROP RATIO
+// ══════════════════════════════════════════
+window.setCropRatio = (ratio, btn) => {
+  S.cropRatio = ratio;
+  document.querySelectorAll('.crop-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  saveSettings();
+  if (S.imageBitmap) { sizeCropCanvas(); resetCropTransform(); drawCropViewport(); }
+};
+
+function getOutputDims() {
+  const { width: iw, height: ih } = S.imageBitmap;
+  if (S.cropRatio === '1:1') { const s = Math.min(iw,ih); return { outW:s, outH:s }; }
+  if (S.cropRatio === '4:5') {
+    let w=iw, h=Math.round(iw*5/4);
+    if (h>ih) { h=ih; w=Math.round(ih*4/5); }
+    return { outW:w, outH:h };
+  }
+  return { outW:iw, outH:ih };
+}
+
+// ══════════════════════════════════════════
+// CROP STAGE
+// ══════════════════════════════════════════
+window.enterCropMode = () => {
+  if (!S.imageBitmap) return;
+  showStage('crop');
+  sizeCropCanvas();
+  // Only reset transform when entering fresh (not when re-entering after apply)
+  if (!S.cropApplied) resetCropTransform();
+  drawCropViewport();
+  bindCropEvents();
+};
+
+function showStage(name) {
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('crop-stage').classList.toggle('active', name==='crop');
+  document.getElementById('preview-stage').classList.toggle('active', name==='preview');
+}
+
+function sizeCropCanvas() {
+  const area = document.getElementById('canvas-area');
+  const aw = area.clientWidth - 48;
+  const ah = area.clientHeight - 110;
+  const { outW, outH } = getOutputDims();
+  S.crop.outW = outW; S.crop.outH = outH;
+  const ratio = outW / outH;
+  let vW = aw, vH = aw / ratio;
+  if (vH > ah) { vH = ah; vW = ah * ratio; }
+  CV.W = Math.floor(vW); CV.H = Math.floor(vH);
+
+  ['crop-canvas','crop-grid-canvas'].forEach(id => {
+    const c = document.getElementById(id);
+    c.width = CV.W; c.height = CV.H;
+    c.style.width = CV.W+'px'; c.style.height = CV.H+'px';
+  });
+}
+
+function resetCropTransform() {
+  const { width: iw, height: ih } = S.imageBitmap;
+  const { outW, outH } = getOutputDims();
+  S.crop.outW = outW; S.crop.outH = outH;
+  // Scale = 1 means image fits exactly to fill the output frame
+  S.crop.scale = 1;
+  // Center the crop within the image
+  S.crop.offsetX = (iw - outW) / 2;
+  S.crop.offsetY = (ih - outH) / 2;
+  clampOffset();
+}
+
+function clampOffset() {
+  const { width: iw, height: ih } = S.imageBitmap;
+  const { outW, outH, scale } = S.crop;
+  // At scale > 1, effective image size is bigger
+  const effW = iw * scale;
+  const effH = ih * scale;
+  // offsetX/Y are in the scaled image's pixel space
+  S.crop.offsetX = Math.max(0, Math.min(S.crop.offsetX, effW - outW));
+  S.crop.offsetY = Math.max(0, Math.min(S.crop.offsetY, effH - outH));
+}
+
+function drawCropViewport() {
+  const bmp = S.imageBitmap;
+  const cc  = document.getElementById('crop-canvas');
+  const ctx = cc.getContext('2d');
+  ctx.clearRect(0, 0, CV.W, CV.H);
+
+  // Convert from "scaled image space" back to source image coords
+  const { outW, outH, scale, offsetX, offsetY } = S.crop;
+  // srcX, srcY, srcW, srcH in the original bitmap
+  const srcX = offsetX / scale;
+  const srcY = offsetY / scale;
+  const srcW = outW / scale;
+  const srcH = outH / scale;
+
+  ctx.drawImage(bmp, srcX, srcY, srcW, srcH, 0, 0, CV.W, CV.H);
+
+  // Grid overlay
+  const gc  = document.getElementById('crop-grid-canvas');
+  const gx  = gc.getContext('2d');
+  gx.clearRect(0, 0, CV.W, CV.H);
+  gx.strokeStyle = 'rgba(255,255,255,0.16)'; gx.lineWidth = 0.5;
+  for (let i=1;i<3;i++) {
+    gx.beginPath(); gx.moveTo(CV.W*i/3,0); gx.lineTo(CV.W*i/3,CV.H); gx.stroke();
+    gx.beginPath(); gx.moveTo(0,CV.H*i/3); gx.lineTo(CV.W,CV.H*i/3); gx.stroke();
+  }
+  gx.strokeStyle='rgba(200,169,110,0.6)'; gx.lineWidth=1.5; gx.strokeRect(1,1,CV.W-2,CV.H-2);
+  const bl=18; gx.strokeStyle='rgba(200,169,110,1)'; gx.lineWidth=2;
+  [[0,0],[CV.W,0],[0,CV.H],[CV.W,CV.H]].forEach(([cx,cy]) => {
+    const dx=cx===0?1:-1, dy=cy===0?1:-1;
+    gx.beginPath(); gx.moveTo(cx+dx*bl,cy+dy*1); gx.lineTo(cx+dx*1,cy+dy*1); gx.lineTo(cx+dx*1,cy+dy*bl); gx.stroke();
+  });
+
+  document.getElementById('zoom-pill').textContent = Math.round(S.crop.scale*100)+'%';
+}
+
+// ── Drag / Zoom ──────────────────────────────────────
+let drag = null;
+let lastTouches = null;
+let lastPinchDist = null;
+
+function bindCropEvents() {
+  // Clone to remove old listeners
+  const old = document.getElementById('crop-canvas');
+  const fresh = old.cloneNode(true);
+  old.parentNode.replaceChild(fresh, old);
+  // copy size
+  fresh.width = CV.W; fresh.height = CV.H;
+  fresh.style.width = CV.W+'px'; fresh.style.height = CV.H+'px';
+
+  fresh.addEventListener('mousedown', e => {
+    e.preventDefault();
+    drag = { sx: e.clientX, sy: e.clientY, ox: S.crop.offsetX, oy: S.crop.offsetY };
+  });
+  window.addEventListener('mousemove', e => {
+    if (!drag) return;
+    const { outW, outH, scale } = S.crop;
+    // Display-px delta → source-image-px delta (accounting for zoom & display scale)
+    const dispPerSrcX = CV.W / outW * scale;
+    const dispPerSrcY = CV.H / outH * scale;
+    S.crop.offsetX = drag.ox - (e.clientX - drag.sx) / dispPerSrcX * scale;
+    S.crop.offsetY = drag.oy - (e.clientY - drag.sy) / dispPerSrcY * scale;
+    clampOffset(); drawCropViewport();
+  });
+  window.addEventListener('mouseup', () => { drag = null; });
+
+  fresh.addEventListener('wheel', e => {
+    e.preventDefault();
+    const step = e.deltaY > 0 ? -0.06 : 0.06;
+    zoomAt(e.clientX, e.clientY, step, fresh);
+  }, { passive: false });
+
+  fresh.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+      drag = { sx: e.touches[0].clientX, sy: e.touches[0].clientY, ox: S.crop.offsetX, oy: S.crop.offsetY };
+    } else if (e.touches.length === 2) {
+      drag = null;
+      lastPinchDist = pinchDist(e.touches);
+      lastTouches = e.touches;
+    }
+  }, { passive: false });
+
+  fresh.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 1 && drag) {
+      const { outW, outH, scale } = S.crop;
+      const dpx = CV.W / outW * scale;
+      const dpy = CV.H / outH * scale;
+      S.crop.offsetX = drag.ox - (e.touches[0].clientX - drag.sx) / dpx * scale;
+      S.crop.offsetY = drag.oy - (e.touches[0].clientY - drag.sy) / dpy * scale;
+      clampOffset(); drawCropViewport();
+    } else if (e.touches.length === 2 && lastPinchDist) {
+      const d = pinchDist(e.touches);
+      const factor = d / lastPinchDist;
+      const mid = pinchMid(e.touches, fresh);
+      applyZoomFactor(factor, mid.x, mid.y, fresh);
+      lastPinchDist = d;
+      clampOffset(); drawCropViewport();
+    }
+  }, { passive: false });
+
+  fresh.addEventListener('touchend', e => { if (e.touches.length===0) { drag=null; lastPinchDist=null; } });
+
+  // Re-draw
+  drawCropViewport();
+}
+
+function zoomAt(clientX, clientY, step, canvas) {
+  const rect = canvas.getBoundingClientRect();
+  const cx = clientX - rect.left; // display px within canvas
+  const cy = clientY - rect.top;
+  const newScale = Math.max(1, Math.min(5, S.crop.scale + step));
+  applyZoomFactor(newScale / S.crop.scale, cx, cy, canvas);
+}
+
+function applyZoomFactor(factor, cx, cy, canvas) {
+  // cx, cy in display pixels
+  const { outW, outH, scale } = S.crop;
+  const newScale = Math.max(1, Math.min(5, scale * factor));
+  // Pivot: point under cursor should stay fixed
+  // cursor in "scaled image px": cx / (CV.W/outW) + offsetX, but simpler:
+  // offsetX_new = cursor_scaled_px * (1 - newScale/oldScale) + offsetX * newScale/oldScale
+  const dispToScaled = outW / CV.W; // scaled-img-px per display-px
+  const cursorSX = cx * dispToScaled + S.crop.offsetX; // cursor in scaled-img-px
+  const cursorSY = cy * (outH / CV.H) + S.crop.offsetY;
+  S.crop.offsetX = cursorSX - cx * dispToScaled * (newScale / scale);
+  S.crop.offsetY = cursorSY - cy * (outH / CV.H) * (newScale / scale);
+  S.crop.scale = newScale;
+  clampOffset(); drawCropViewport();
+}
+
+function pinchDist(t) { return Math.hypot(t[1].clientX-t[0].clientX, t[1].clientY-t[0].clientY); }
+function pinchMid(t, canvas) {
+  const r = canvas.getBoundingClientRect();
+  return { x: (t[0].clientX+t[1].clientX)/2-r.left, y: (t[0].clientY+t[1].clientY)/2-r.top };
+}
+
+// ── Apply / Cancel ─────────────────────────────────────
+window.applyCrop = () => {
+  S.cropApplied = true;
+  showStage('preview');
+  // Ensure Material Symbols is loaded before rendering text
+  document.fonts.load(`24px 'Material Symbols Outlined'`).then(() => renderOverlay());
+};
+
+window.cancelCrop = () => {
+  if (S.cropApplied) showStage('preview');
+  else { document.getElementById('empty-state').style.display=''; document.getElementById('crop-stage').classList.remove('active'); }
+};
+
+// ══════════════════════════════════════════
+// OVERLAY RENDER (full resolution)
+// ══════════════════════════════════════════
+function renderOverlay() {
+  if (!S.imageBitmap || !S.cropApplied) return;
+  const { outW, outH, scale, offsetX, offsetY } = S.crop;
+
+  const canvas = document.getElementById('preview');
+  canvas.width = outW; canvas.height = outH;
+  const ctx = canvas.getContext('2d');
+
+  // Draw cropped source
+  const srcX = offsetX / scale, srcY = offsetY / scale;
+  const srcW = outW / scale,    srcH = outH / scale;
+  ctx.drawImage(S.imageBitmap, srcX, srcY, srcW, srcH, 0, 0, outW, outH);
+
+  // Blur
+  if (S.blur > 0) { ctx.filter=`blur(${S.blur}px)`; ctx.drawImage(canvas,0,0); ctx.filter='none'; }
+
+  // Darken
+  if (S.darken > 0) { ctx.fillStyle=`rgba(0,0,0,${S.darken/100})`; ctx.fillRect(0,0,outW,outH); }
+
+  // Text
+  const lh  = S.lineHeight / 100;
+  const bu  = outW * 0.028 * (S.fontScale/100);
+  const BIG = bu * 1.9, MED = bu * 1.05, SM = bu * 0.88, TI = bu * 0.78;
+  const mx  = outW * (S.marginPct/100) + outW * (S.hOffsetPct/100); // left margin + H offset
+  const rmx = outW * (S.marginPct/100);           // right margin (symmetric)
+  const availW = outW - mx - rmx;                 // usable width between margins
+  const mxW = availW * (S.textWidthPct/100);      // text block width within available space
+
+  const exif = S.exif, prof = S.profile;
+  const showC  = document.getElementById('show-copyright').checked;
+  const showI  = document.getElementById('show-instagram').checked;
+  const showW  = document.getElementById('show-website').checked;
+  const showDT = document.getElementById('show-datetime').checked;
+  const divOp  = parseInt(document.getElementById('divider-opacity').value)/100;
+
+  // Apply text shadow if enabled
+  if (S.shadowEnabled) {
+    ctx.shadowColor   = `rgba(0,0,0,${S.shadowOpacity/100})`;
+    ctx.shadowBlur    = S.shadowBlur * (outW / 1000); // scale with image size
+    ctx.shadowOffsetX = S.shadowX   * (outW / 1000);
+    ctx.shadowOffsetY = S.shadowY   * (outW / 1000);
+  } else {
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+  }
+
+  // Material Symbols codepoints:
+  // camera = \ue412, shutter_speed = \ue43d, iso = \ue3f4, eye_tracking = \uf5f3
+  // schedule (clock) = \ue8b5, photo_camera = \ue412, lens = \ue3fa
+  // copyright = \ue90c, alternate_email = \ue0e6, language = \ue80b
+  const ICON_FONT = `'Material Symbols Outlined'`;
+  const stats = [
+    { icon:'\uf029', label: exif.aperture },   // camera
+    { icon:'\uf47d', label: exif.shutter  },   // shutter speed
+    { icon:'\uf480', label: exif.iso      },   // iso
+    { icon:'\ue3b5', label: exif.focal    },   // camera focal length
+  ].filter(s => s.label && s.label !== '—');
+
+  const meta = [];
+  if (showDT && exif.datetime && exif.datetime!=='—') meta.push({ icon:'\ue916', text:exif.datetime }); // schedule
+  if (exif.camera && exif.camera!=='—')               meta.push({ icon:'\ue412', text:exif.camera });   // photo_camera
+  if (exif.lens   && exif.lens!=='—')                 meta.push({ icon:'\uf20e', text:exif.lens });     // lens
+  if (showC && prof.name)                             meta.push({ icon:'\ue90c', text:prof.name });     // copyright
+  if (showI && prof.instagram)                        meta.push({ icon:'\ue0e6', text:prof.instagram }); // alternate_email
+  if (showW && prof.website)                          meta.push({ icon:'\ue80b', text:prof.website });  // language
+
+  ctx.font = `bold ${MED}px 'Helvetica Neue',Arial,sans-serif`;
+  const litLines = S.lightingNotes ? wrapText(ctx, S.lightingNotes, mxW - mx*0.2) : [];
+
+  const statH  = BIG * lh * 1.05;
+  const litH   = MED * lh;
+  const metaH  = SM  * lh * 1.1;
+  const divH   = BIG * 0.6;
+  const gapS   = BIG * 0.8;
+  const gapL   = BIG * 0.5;
+
+  const totalH = stats.length*statH + gapS
+    + (litLines.length  > 0 ? litLines.length*litH + gapL : 0)
+    + (meta.length      > 0 ? divH + gapL + meta.length*metaH : 0);
+
+  let y = outH*0.5 + outH*(S.vOffsetPct/100) - totalH/2;
+
+  stats.forEach(s => {
+    ctx.font=`${BIG*0.82}px ${ICON_FONT}`; ctx.fillStyle='rgba(255,255,255,0.55)';
+    ctx.fillText(s.icon, mx, y+BIG*0.80);
+    ctx.font=`bold ${BIG}px 'Helvetica Neue',Arial,sans-serif`; ctx.fillStyle='rgba(255,255,255,0.95)';
+    ctx.fillText(s.label, mx+BIG*1.1, y+BIG*0.85);
+    y+=statH;
+  });
+  y+=gapS;
+
+  if (litLines.length > 0) {
+    ctx.font=`bold ${MED}px 'Helvetica Neue',Arial,sans-serif`; ctx.fillStyle='rgba(255,255,255,0.90)';
+    litLines.forEach(l => { ctx.fillText(l, mx, y+MED*0.85); y+=litH; });
+    y+=gapL;
+  }
+
+  if (meta.length > 0) {
+    // Clear shadow for the divider line
+    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+    ctx.strokeStyle=`rgba(255,255,255,${divOp})`; ctx.lineWidth=Math.max(1,outW*0.0008);
+    ctx.beginPath(); ctx.moveTo(mx, y+divH*0.3); ctx.lineTo(mx+mxW*0.68, y+divH*0.3); ctx.stroke();
+    y+=divH;
+    // Re-apply shadow for meta text
+    if (S.shadowEnabled) {
+      ctx.shadowColor   = `rgba(0,0,0,${S.shadowOpacity/100})`;
+      ctx.shadowBlur    = S.shadowBlur * (outW / 1000);
+      ctx.shadowOffsetX = S.shadowX   * (outW / 1000);
+      ctx.shadowOffsetY = S.shadowY   * (outW / 1000);
+    }
+    meta.forEach(m => {
+      ctx.font=`${SM*0.85}px ${ICON_FONT}`; ctx.fillStyle='rgba(255,255,255,0.44)';
+      ctx.fillText(m.icon, mx, y+SM*0.80);
+      ctx.font=`bold ${SM}px 'Helvetica Neue',Arial,sans-serif`; ctx.fillStyle='rgba(255,255,255,0.85)';
+      ctx.fillText(m.text, mx+SM*1.1, y+SM*0.82);
+      y+=metaH;
+    });
+  }
+
+  document.getElementById('preview-dim').textContent = `${outW} × ${outH}px`;
+}
+
+function wrapText(ctx, text, maxW) {
+  const words = text.split(' '), lines = []; let cur = '';
+  words.forEach(w => {
+    const t = cur ? cur+' '+w : w;
+    if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur=w; } else cur=t;
+  });
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+// ══════════════════════════════════════════
+// SLIDERS
+// ══════════════════════════════════════════
+window.updateSlider = (key, el, unit) => {
+  S[key] = +el.value;
+  const valEl = document.getElementById(key+'-val');
+  if (valEl) valEl.textContent = el.value + unit;
+  if (key === 'shadowEnabled') {
+    const panel = document.getElementById('shadow-controls');
+    panel.style.opacity = S.shadowEnabled ? '1' : '0.35';
+    panel.style.pointerEvents = S.shadowEnabled ? 'all' : 'none';
+  }
+  saveSettings();
+  renderOverlay();
+};
+
+// ══════════════════════════════════════════
+// EXIF
+// ══════════════════════════════════════════
+function processExif(exif) {
+  if (!exif) { clearExif(); return; }
+  const fS = v => !v ? '—' : v<1 ? `1/${Math.round(1/v)}s` : `${v}s`;
+  const fA = v => v ? `f ${v.toFixed(1)}` : '—';
+  const fI = v => v ? `ISO ${v}` : '—';
+  const fF = v => v ? `${Math.round(v)}mm` : '—';
+  const fD = v => { if (!v) return '—'; try { return new Date(v).toLocaleString('en-US',{hour:'numeric',minute:'2-digit',hour12:true,day:'numeric',month:'long',year:'numeric'}); } catch { return String(v); } };
+  S.exif = {
+    aperture: fA(exif.FNumber||exif.ApertureValue),
+    shutter:  fS(exif.ExposureTime),
+    iso:      fI(exif.ISO||exif.ISOSpeedRatings),
+    focal:    fF(exif.FocalLength),
+    camera:   [exif.Make,exif.Model].filter(Boolean).join(' ')||'—',
+    lens:     exif.LensModel||exif.Lens||'—',
+    datetime: fD(exif.DateTimeOriginal||exif.DateTime),
+  };
+  document.getElementById('ex-aperture').textContent = S.exif.aperture;
+  document.getElementById('ex-shutter').textContent  = S.exif.shutter;
+  document.getElementById('ex-iso').textContent      = S.exif.iso;
+  document.getElementById('ex-focal').textContent    = S.exif.focal;
+  document.getElementById('ex-camera').textContent   = S.exif.camera;
+  document.getElementById('ex-lens').textContent     = S.exif.lens;
+  document.getElementById('ex-date').textContent     = S.exif.datetime;
+}
+function clearExif() {
+  S.exif = {};
+  ['aperture','shutter','iso','focal','camera','lens','date'].forEach(k => { const el=document.getElementById('ex-'+k); if(el) el.textContent='—'; });
+}
+
+// ══════════════════════════════════════════
+// PROFILE
+// ══════════════════════════════════════════
+window.saveProfile = () => {
+  S.profile = { name: document.getElementById('prof-name').value, instagram: document.getElementById('prof-instagram').value, website: document.getElementById('prof-website').value };
+  saveSettings();
+  renderOverlay();
+};
+
+// ══════════════════════════════════════════
+// PRESETS
+// ══════════════════════════════════════════
+window.saveLightingPreset = () => {
+  const text = document.getElementById('lighting-notes').value.trim();
+  if (!text) { toast('Enter lighting notes first','error'); return; }
+  S.presets.push({ name: text.substring(0,42)+(text.length>42?'…':''), text });
+  saveSettings();
+  renderPresets(); toast('Preset saved','success');
+};
+function renderPresets() {
+  const list = document.getElementById('preset-list');
+  if (!S.presets.length) { list.innerHTML='<div class="preset-empty">No presets saved yet</div>'; return; }
+  list.innerHTML = S.presets.map((p,i) => `<div class="preset-item"><span class="preset-name" title="${p.text}">${p.name}</span><button class="preset-use" onclick="usePreset(${i})">Use</button><button class="preset-del" onclick="deletePreset(${i})">×</button></div>`).join('');
+}
+window.usePreset = i => { document.getElementById('lighting-notes').value=S.presets[i].text; S.lightingNotes=S.presets[i].text; renderOverlay(); };
+window.deletePreset = i => { S.presets.splice(i,1); saveSettings(); renderPresets(); };
+
+// ══════════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════════
+window.exportImage = async (format) => {
+  const canvas = document.getElementById('preview');
+  if (!canvas.width) { toast('No image to export', 'error'); return; }
+  const mime = format === 'png' ? 'image/png' : 'image/jpeg';
+  const ext  = format === 'png' ? 'png' : 'jpg';
+  const quality = format === 'png' ? 1 : 0.93;
+  const base = S.imageFile ? S.imageFile.name.replace(/\.[^.]+$/, '') : 'export';
+  const filename = `${base}_overlay.${ext}`;
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{ description: format === 'png' ? 'PNG Image' : 'JPEG Image', accept: { [mime]: ['.'+ext] } }],
+      });
+      const blob = await new Promise(res => canvas.toBlob(res, mime, quality));
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      toast(`Saved as ${format.toUpperCase()}`, 'success');
+      return;
+    } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  const url = canvas.toDataURL(mime, quality);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  toast(`Downloaded as ${format.toUpperCase()}`, 'success');
+};
+
+window.exportSettings = async (format) => {
+  const data = {
+    exportedAt: new Date().toISOString(), profile: S.profile, cropRatio: S.cropRatio,
+    imageEffects: { blur: S.blur, darken: S.darken },
+    textPosition: { marginPct: S.marginPct, textWidthPct: S.textWidthPct, vOffsetPct: S.vOffsetPct, hOffsetPct: S.hOffsetPct },
+    typography: { fontScale: S.fontScale, lineHeight: S.lineHeight },
+    shadow: { enabled: !!S.shadowEnabled, blur: S.shadowBlur, opacity: S.shadowOpacity, offsetX: S.shadowX, offsetY: S.shadowY },
+    display: {
+      showCopyright: document.getElementById('show-copyright').checked,
+      showInstagram: document.getElementById('show-instagram').checked,
+      showWebsite:   document.getElementById('show-website').checked,
+      showDatetime:  document.getElementById('show-datetime').checked,
+      dividerOpacity: parseInt(document.getElementById('divider-opacity').value),
+    },
+    presets: S.presets,
+  };
+  const yn = v => v ? 'Yes' : 'No';
+  let content, mime, ext, description;
+  if (format === 'json') {
+    content = JSON.stringify(data, null, 2);
+    mime = 'application/json'; ext = 'json'; description = 'JSON File';
+  } else {
+    let md = `# Frame & Data — Settings Export\n\n*${new Date().toLocaleString()}*\n\n`;
+    md += `## Profile\n\n| Field | Value |\n|---|---|\n`;
+    md += `| Name | ${data.profile.name||'—'} |\n| Instagram | ${data.profile.instagram||'—'} |\n| Website | ${data.profile.website||'—'} |\n\n`;
+    md += `## Image Settings\n\n| Setting | Value |\n|---|---|\n`;
+    md += `| Crop Ratio | ${data.cropRatio} |\n| Blur | ${data.imageEffects.blur}px |\n| Darken | ${data.imageEffects.darken}% |\n\n`;
+    md += `## Text Position\n\n| Setting | Value |\n|---|---|\n`;
+    md += `| Margins | ${data.textPosition.marginPct}% |\n| Text Width | ${data.textPosition.textWidthPct}% |\n`;
+    md += `| Vertical Offset | ${data.textPosition.vOffsetPct}% |\n| Horizontal Offset | ${data.textPosition.hOffsetPct}% |\n\n`;
+    md += `## Typography\n\n| Setting | Value |\n|---|---|\n`;
+    md += `| Font Scale | ${data.typography.fontScale}% |\n| Line Height | ${data.typography.lineHeight}% |\n\n`;
+    md += `## Text Shadow\n\n| Setting | Value |\n|---|---|\n`;
+    md += `| Enabled | ${yn(data.shadow.enabled)} |\n| Blur | ${data.shadow.blur}px |\n| Opacity | ${data.shadow.opacity}% |\n`;
+    md += `| Offset X | ${data.shadow.offsetX}px |\n| Offset Y | ${data.shadow.offsetY}px |\n\n`;
+    md += `## Display Options\n\n| Setting | Value |\n|---|---|\n`;
+    md += `| Show Copyright | ${yn(data.display.showCopyright)} |\n| Show Instagram | ${yn(data.display.showInstagram)} |\n`;
+    md += `| Show Website | ${yn(data.display.showWebsite)} |\n| Show Date/Time | ${yn(data.display.showDatetime)} |\n`;
+    md += `| Divider Opacity | ${data.display.dividerOpacity}% |\n\n`;
+    md += `## Lighting Presets\n\n`;
+    if (!data.presets.length) md += `*No presets saved.*\n`;
+    else data.presets.forEach((p,i) => { md += `### Preset ${i+1}\n\n${p.text}\n\n`; });
+    content = md; mime = 'text/markdown'; ext = 'md'; description = 'Markdown File';
+  }
+  const blob = new Blob([content], { type: mime });
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: `framedata-settings.${ext}`,
+        types: [{ description, accept: { [mime]: ['.'+ext] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      toast(`Settings saved as .${ext}`, 'success');
+      return;
+    } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `framedata-settings.${ext}`; a.click();
+  toast(`Settings exported as .${ext}`, 'success');
+};
+
+
+// ══════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════
+let _tt;
+function toast(msg,type='') { const el=document.getElementById('toast'); el.textContent=msg; el.className='toast show '+type; clearTimeout(_tt); _tt=setTimeout(()=>el.classList.remove('show'),2800); }
+</script>
+</body>
+</html>
