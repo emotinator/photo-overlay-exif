@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Photo Overlay — EXIF</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&family=Montserrat:wght@100;300;900&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,300,0,0" rel="stylesheet">
 <style>
   :root {
@@ -26,6 +26,38 @@
     --radius: 6px;
     --panel: 420px;
   }
+
+  [data-theme="light"] {
+    --bg: #f0f0ed;
+    --surface: #fafaf8;
+    --surface2: #f0f0ed;
+    --surface3: #e4e4e0;
+    --border: #d4d4ce;
+    --border2: #c4c4bc;
+    --text: #1a1a1c;
+    --text2: #5a5a60;
+    --text3: #9898a0;
+    --accent: #a07840;
+    --accent2: #c09050;
+    --accent-dim: rgba(160,120,64,0.10);
+    --red: #c04040;
+    --green: #3a8a50;
+  }
+
+  /* Theme toggle button */
+  .theme-toggle {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 1.5px solid var(--border2);
+    color: var(--text2);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .theme-toggle:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: 'Syne', sans-serif;
@@ -42,8 +74,8 @@
     padding: 0 20px; height: 58px; border-bottom: 1px solid var(--border);
     background: var(--surface); flex-shrink: 0; z-index: 10;
   }
-  .logo { font-family: 'Instrument Serif', serif; font-size: 24px; color: var(--accent); letter-spacing: 0.02em; }
-  .logo span { color: var(--text3); font-style: italic; font-size: 15px; margin-left: 8px; font-family: 'DM Mono', monospace; }
+  .logo { font-family: 'Montserrat', sans-serif; font-size: 20px; font-weight: 900; color: var(--accent); letter-spacing: 0; text-transform: uppercase; }
+  .logo span { color: var(--text); font-weight: 100; font-size: 20px; margin-left: 10px; letter-spacing: 0; font-family: 'Montserrat', sans-serif; text-transform: uppercase; }
   .header-actions { display: flex; gap: 8px; align-items: center; }
 
   .app-body { display: flex; flex: 1; overflow: hidden; }
@@ -55,11 +87,11 @@
   .sidebar-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .tab-btn {
     flex: 1; padding: 14px 6px; background: none; border: none; color: var(--text3);
-    font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.09em;
+    font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 300; letter-spacing: 0.14em;
     text-transform: uppercase; cursor: pointer; transition: all 0.15s;
     border-bottom: 2px solid transparent; margin-bottom: -1px;
   }
-  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 900; }
   .tab-btn:hover:not(.active) { color: var(--text2); }
   .tab-panel { display: none; flex-direction: column; overflow-y: auto; flex: 1; }
   .tab-panel.active { display: flex; }
@@ -68,8 +100,9 @@
 
   .section { padding: 18px 20px; border-bottom: 1px solid var(--border); }
   .section-label {
-    font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+    font-size: 10px; font-weight: 900; letter-spacing: 0.03rem; text-transform: uppercase;
     color: var(--text3); margin-bottom: 14px; display: flex; align-items: center; gap: 6px;
+    font-family: 'Montserrat', sans-serif;
   }
   .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
@@ -102,7 +135,7 @@
 
   .field-row { margin-bottom: 12px; }
   .field-row:last-child { margin-bottom: 0; }
-  .field-label { font-size: 11px; color: var(--text3); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 5px; }
+  .field-label { font-size: 10px; color: var(--text3); font-weight: 300; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 5px; font-family: 'Montserrat', sans-serif; }
   input[type=text], textarea {
     width: 100%; background: var(--surface2); border: 1.5px solid var(--border);
     border-radius: var(--radius); color: var(--text); font-family: 'DM Mono', monospace;
@@ -122,20 +155,20 @@
   .preset-list::-webkit-scrollbar-thumb { background: var(--border2); }
   .preset-item { display: flex; align-items: center; gap: 7px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 8px 11px; }
   .preset-name { flex: 1; font-size: 12px; color: var(--text2); font-family: 'DM Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .preset-use { font-size: 11px; color: var(--accent); background: var(--accent-dim); border: 1px solid var(--accent); border-radius: 3px; padding: 3px 7px; cursor: pointer; font-family: 'Syne', sans-serif; font-weight: 700; transition: all 0.15s; white-space: nowrap; }
+  .preset-use { font-size: 10px; color: var(--accent); background: var(--accent-dim); border: 1px solid var(--accent); border-radius: 3px; padding: 3px 7px; cursor: pointer; font-family: 'Montserrat', sans-serif; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; transition: all 0.15s; white-space: nowrap; }
   .preset-use:hover { background: var(--accent); color: #000; }
   .preset-del { font-size: 16px; color: var(--text3); cursor: pointer; padding: 0 2px; transition: color 0.15s; background: none; border: none; line-height: 1; }
   .preset-del:hover { color: var(--red); }
   .preset-empty { font-size: 13px; color: var(--text3); font-style: italic; padding: 8px 0; font-family: 'DM Mono', monospace; }
 
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border-radius: var(--radius); font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; transition: all 0.15s; border: none; white-space: nowrap; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border-radius: var(--radius); font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; transition: all 0.15s; border: none; white-space: nowrap; }
   .btn-ghost { background: transparent; border: 1.5px solid var(--border2); color: var(--text2); }
   .btn-ghost:hover { border-color: var(--text2); color: var(--text); }
   .btn-ghost:disabled { opacity: 0.35; cursor: not-allowed; }
   .btn-ghost:disabled:hover { border-color: var(--border2); color: var(--text2); }
   .btn-accent { background: var(--accent); color: #0e0e0f; }
   .btn-accent:hover { background: var(--accent2); }
-  .btn-sm { padding: 8px 13px; font-size: 12px; }
+  .btn-sm { padding: 8px 13px; font-size: 10px; letter-spacing: 0.1em; }
   .btn-full { width: 100%; }
   .btn-row { display: flex; gap: 6px; }
 
@@ -148,7 +181,7 @@
   /* ── Empty ── */
   #empty-state { text-align: center; }
   .empty-icon { font-size: 56px; margin-bottom: 16px; opacity: 0.12; }
-  #empty-state h2 { font-family: 'Instrument Serif', serif; font-size: 26px; color: var(--text3); margin-bottom: 10px; }
+  #empty-state h2 { font-family: 'Montserrat', sans-serif; font-size: 22px; font-weight: 100; color: var(--text3); margin-bottom: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
   #empty-state p { font-size: 14px; color: var(--text3); font-family: 'DM Mono', monospace; }
 
   /* ── Crop Stage ── */
@@ -192,6 +225,31 @@
     justify-content: flex-end; padding: 0 20px; gap: 8px;
   }
 
+  /* ── Global Drop Overlay ── */
+  #global-drop-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(14,14,15,0.88);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.15s;
+  }
+  #global-drop-overlay.visible { opacity: 1; pointer-events: none; }
+  .global-drop-inner {
+    border: 2px dashed var(--accent);
+    border-radius: 16px;
+    padding: 60px 80px;
+    text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+  }
+  .global-drop-icon { font-size: 48px; color: var(--accent); opacity: 0.7; }
+  .global-drop-label {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 300; font-size: 18px;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--accent);
+  }
+
   /* ── Toast ── */
   .toast {
     position: fixed; bottom: 70px; right: 20px; background: var(--surface3);
@@ -207,8 +265,9 @@
 <body>
 
 <header>
-  <div class="logo">Photo Overlay <span>EXIF</span></div>
+  <div class="logo">PHOTO OVERLAY <span>EXIF</span></div>
   <div class="header-actions">
+    <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">☀</button>
     <button class="btn btn-ghost btn-sm" onclick="exportSettings('json')">↓ .json</button>
     <button class="btn btn-ghost btn-sm" onclick="exportSettings('md')">↓ .md</button>
   </div>
@@ -432,11 +491,64 @@
   <button class="btn btn-accent btn-sm" onclick="exportImage('jpeg')">Export JPEG</button>
 </div>
 
+<div id="global-drop-overlay">
+  <div class="global-drop-inner">
+    <div class="global-drop-icon">⬆</div>
+    <div class="global-drop-label">Drop image anywhere</div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://unpkg.com/exifr@7.1.3/dist/full.umd.cjs"></script>
 
 <script>
+
+// ══════════════════════════════════════════
+// ICON IMAGE PRELOAD
+// ══════════════════════════════════════════
+const ICON_URIS = {
+  aperture: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciICB2aWV3Qm94PSIwIDAgMzAgMzAiIHdpZHRoPSIxMDBweCIgaGVpZ2h0PSIxMDBweCI+PHBhdGggZD0iTSAxNSAzIEMgOC4zODQ0Mjc2IDMgMyA4LjM4NDQyNzYgMyAxNSBDIDMgMjEuNjE1NTcyIDguMzg0NDI3NiAyNyAxNSAyNyBDIDIxLjYxNTU3MiAyNyAyNyAyMS42MTU1NzIgMjcgMTUgQyAyNyA4LjM4NDQyNzYgMjEuNjE1NTcyIDMgMTUgMyB6IE0gMTUgNSBDIDE2LjA1MzkzNSA1IDE3LjA2ODU1MiA1LjE2NDQ1ODkgMTguMDIxNDg0IDUuNDY0ODQzOCBMIDE4LjAwNTg1OSAxMC45MzU1NDcgTCAxNy4xMjUgMTAuMDU2NjQxIEwgMTcuMDY4MzU5IDEwIEwgMTIuNDM1NTQ3IDUuMzM5ODQzOCBDIDEzLjI1NDI1MyA1LjEyMzE5NDcgMTQuMTExMzgzIDUgMTUgNSB6IE0gMTAuNDA4MjAzIDYuMTM2NzE4OCBMIDE0LjI0ODA0NyAxMCBMIDEzIDEwIEwgNi4zNDM3NSAxMCBDIDcuMjk2NDk5IDguMzUwNjAxIDguNzE0Mzk0MSA3LjAxNjk0MDggMTAuNDA4MjAzIDYuMTM2NzE4OCB6IE0gMjAuMDE5NTMxIDYuMzU1NDY4OCBDIDIxLjY1Mjg5IDcuMzAzOTQ0NyAyMi45ODk4MjggOC42OTczNyAyMy44NjUyMzQgMTAuMzc2OTUzIEwgMjAgMTQuMjQwMjM0IEwgMjAgMTMuMDA3ODEyIEwgMjAuMDE5NTMxIDYuMzU1NDY4OCB6IE0gNS40NTcwMzEyIDEyIEwgMTAuOTI5Njg4IDEyIEwgMTAuMDk3NjU2IDEyLjgzMzk4NCBBIDEuMDAwMSAxLjAwMDEgMCAwIDAgMTAuMDQ4ODI4IDEyLjg4MDg1OSBMIDEwIDEyLjkyOTY4OCBMIDUuMzQ3NjU2MiAxNy41ODAwNzggQyA1LjEyODkxNjggMTYuNzU2MTE2IDUgMTUuODk0MDkzIDUgMTUgQyA1IDEzLjk1NDE1NSA1LjE2MTA2MyAxMi45NDY1NjQgNS40NTcwMzEyIDEyIHogTSAyNC42NTIzNDQgMTIuNDE3OTY5IEMgMjQuODcxMzk2IDEzLjI0MjQ3OCAyNSAxNC4xMDUyNDYgMjUgMTUgQyAyNSAxNi4wNDU4NDUgMjQuODM4OTM3IDE3LjA1MzQzNiAyNC41NDI5NjkgMTggTCAxOS4wNzAzMTIgMTggTCAxOS45MTYwMTYgMTcuMTUyMzQ0IEEgMS4wMDA1ODQzIDEuMDAwNTg0MyAwIDAgMCAxOS45NDcyNjYgMTcuMTIzMDQ3IEwgMjQuNjUyMzQ0IDEyLjQxNzk2OSB6IE0gMTAgMTUuNzU3ODEyIEwgMTAgMTcuMDcwMzEyIEwgMTAgMjMuNjU2MjUgQyA4LjM1NzQzODIgMjIuNzA3NDUxIDcuMDExNzM1IDIxLjMwOTcyNSA2LjEzMjgxMjUgMTkuNjIzMDQ3IEwgMTAgMTUuNzU3ODEyIHogTSAxMiAxOS4wNzAzMTIgTCAxMi44MjgxMjUgMTkuODk4NDM4IEEgMS4wMDAxIDEuMDAwMSAwIDAgMCAxMi44NzY5NTMgMTkuOTQ5MjE5IEwgMTcuNTgwMDc4IDI0LjY1MjM0NCBDIDE2Ljc1NjExNiAyNC44NzEwODMgMTUuODk0MDkzIDI1IDE1IDI1IEMgMTMuOTU0MTU1IDI1IDEyLjk0NjU2NCAyNC44Mzg5MzcgMTIgMjQuNTQyOTY5IEwgMTIgMTkuMDcwMzEyIHogTSAxNS43NTU4NTkgMjAgTCAxNy4wNzAzMTIgMjAgTCAyMy42NTYyNSAyMCBDIDIyLjcwNzE1OCAyMS42NDMwNjcgMjEuMzA4NDY3IDIyLjk4ODI4MiAxOS42MjEwOTQgMjMuODY3MTg4IEwgMTUuNzU1ODU5IDIwIHoiLz48L3N2Zz4=",
+  shutter: "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIj8+PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciICB2aWV3Qm94PSIwIDAgMzAgMzAiIHdpZHRoPSIxMDBweCIgaGVpZ2h0PSIxMDBweCI+ICAgIDxwYXRoIGQ9Ik0gMTQgMiBDIDEzLjQ0OCAyIDEzIDIuNDQ4IDEzIDMgTCAxMyA0LjE5MTQwNjIgQyA3Ljg4OTA0NTMgNS4xMzY0MDUzIDQgOS42MjA1Nzc1IDQgMTUgQyA0IDIxLjA2MzI4OCA4LjkzNjcxMjQgMjYgMTUgMjYgQyAyMS4wNjMyODggMjYgMjYgMjEuMDYzMjg4IDI2IDE1IEMgMjYgOS42MjA1Nzc1IDIyLjExMDk1NSA1LjEzNjQwNTMgMTcgNC4xOTE0MDYyIEwgMTcgMyBDIDE3IDIuNDQ4IDE2LjU1MiAyIDE2IDIgTCAxNCAyIHogTSAyMi45OTAyMzQgMy45OTAyMzQ0IEEgMS4wMDAxIDEuMDAwMSAwIDAgMCAyMi4yOTI5NjkgNS43MDcwMzEyIEwgMjMuMjkyOTY5IDYuNzA3MDMxMiBBIDEuMDAwMSAxLjAwMDEgMCAxIDAgMjQuNzA3MDMxIDUuMjkyOTY4OCBMIDIzLjcwNzAzMSA0LjI5Mjk2ODggQSAxLjAwMDEgMS4wMDAxIDAgMCAwIDIyLjk5MDIzNCAzLjk5MDIzNDQgeiBNIDE1IDYgQyAxOS45ODI0MDcgNiAyNCAxMC4wMTc1OTMgMjQgMTUgQyAyNCAxOS45ODI0MDcgMTkuOTgyNDA3IDI0IDE1IDI0IEMgMTAuMDE3NTkzIDI0IDYgMTkuOTgyNDA3IDYgMTUgQyA2IDEwLjAxNzU5MyAxMC4wMTc1OTMgNiAxNSA2IHogTSAxNC45ODQzNzUgNy45ODYzMjgxIEEgMS4wMDAxIDEuMDAwMSAwIDAgMCAxNCA5IEwgMTQgMTMuMjcxNDg0IEEgMiAyIDAgMCAwIDEzIDE1IEEgMiAyIDAgMCAwIDE0IDE2LjczMDQ2OSBMIDE0IDE4IEEgMS4wMDAxIDEuMDAwMSAwIDEgMCAxNiAxOCBMIDE2IDE2LjcyODUxNiBBIDIgMiAwIDAgMCAxNyAxNSBBIDIgMiAwIDAgMCAxNiAxMy4yNjk1MzEgTCAxNiA5IEEgMS4wMDAxIDEuMDAwMSAwIDAgMCAxNC45ODQzNzUgNy45ODYzMjgxIHoiLz48L3N2Zz4=",
+  iso: "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIj8+PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciICB2aWV3Qm94PSIwIDAgMzAgMzAiIHdpZHRoPSIxMDBweCIgaGVpZ2h0PSIxMDBweCI+ICAgIDxwYXRoIGQ9Ik0gNiA0IEMgNC44OTUgNCA0IDQuODk1IDQgNiBMIDQgMjQgQyA0IDI1LjEwNSA0Ljg5NSAyNiA2IDI2IEwgMjQgMjYgQyAyNS4xMDUgMjYgMjYgMjUuMTA1IDI2IDI0IEwgMjYgNiBDIDI2IDQuODk1IDI1LjEwNSA0IDI0IDQgTCA2IDQgeiBNIDEzLjQ5NDE0MSAxMS45OTgwNDcgQyAxNC44MjcxNDEgMTEuOTk4MDQ3IDE1Ljc0OTQzOCAxMi43MjEzOTEgMTUuNzczNDM4IDEzLjc3NTM5MSBMIDE0LjQzNzUgMTMuNzc1MzkxIEMgMTQuNDA1NSAxMy4zNzIzOTEgMTQuMDIxNjcyIDEzLjA5Mzc1IDEzLjUxMzY3MiAxMy4wOTM3NSBDIDEzLjAwNDY3MiAxMy4wOTM3NSAxMi42Njk5MjIgMTMuMzMzODkxIDEyLjY2OTkyMiAxMy43MTI4OTEgQyAxMi42Njk5MjIgMTQuMDI0ODkxIDEyLjkyMTQ4NCAxNC4yMDUyMTkgMTMuNTIxNDg0IDE0LjMyNDIxOSBMIDE0LjI1NTg1OSAxNC40NjY3OTcgQyAxNS4zNzk4NTkgMTQuNjgyNzk3IDE1Ljg4NDc2NiAxNS4xOTE3NSAxNS44ODQ3NjYgMTYuMDkzNzUgQyAxNS44ODQ3NjYgMTcuMjgwNzUgMTQuOTc3MzI4IDE4IDEzLjQ4NjMyOCAxOCBDIDEyLjA0NzMyOCAxOCAxMS4xMzkyMzQgMTcuMzIyNjA5IDExLjExNTIzNCAxNi4yMjQ2MDkgTCAxMi40OTYwOTQgMTYuMjI0NjA5IEMgMTIuNTMxMDk0IDE2LjYzODYwOSAxMi45NDU5MjIgMTYuOTAyMzQ0IDEzLjU0NDkyMiAxNi45MDIzNDQgQyAxNC4wODQ5MjIgMTYuOTAyMzQ0IDE0LjQ1NTA3OCAxNi42NDM1NzggMTQuNDU1MDc4IDE2LjI2NzU3OCBDIDE0LjQ1NTA3OCAxNS45NTE1NzggMTQuMjA3NjQxIDE1Ljc4MTM0NCAxMy41NTY2NDEgMTUuNjUyMzQ0IEwgMTIuODA4NTk0IDE1LjUwMTk1MyBDIDExLjc2NzU5NCAxNS4zMDU5NTMgMTEuMjMwNDY5IDE0LjczNzc5NyAxMS4yMzA0NjkgMTMuODQxNzk3IEMgMTEuMjMwNDY5IDEyLjczMDc5NyAxMi4xMjExNDEgMTEuOTk4MDQ3IDEzLjQ5NDE0MSAxMS45OTgwNDcgeiBNIDggMTIgTCA5LjUyNTM5MDYgMTIgTCA5LjUyNTM5MDYgMTggTCA4IDE4IEwgOCAxMiB6IE0gMjAuMDAzOTA2IDEyIEMgMjEuNzE1OTA2IDEyIDIyLjgwNDY4NyAxMy4xNDcwOTQgMjIuODA0Njg4IDE0Ljk5NjA5NCBDIDIyLjgwNDY4NyAxNi44NTEwOTQgMjEuNzE1OTA2IDE4IDIwLjAwMzkwNiAxOCBDIDE4LjI4MzkwNiAxOCAxNy4xOTUzMTIgMTYuODUxMDk0IDE3LjE5NTMxMiAxNC45OTYwOTQgQyAxNy4xOTUzMTIgMTMuMTQ3MDk0IDE4LjI5NjkwNiAxMiAyMC4wMDM5MDYgMTIgeiBNIDIwLjAwMzkwNiAxMy4xOTkyMTkgQyAxOS4yMDM5MDYgMTMuMTk5MjE5IDE4LjY3MTg3NSAxMy45MDEwOTQgMTguNjcxODc1IDE0Ljk5NjA5NCBDIDE4LjY3MTg3NSAxNi4wOTcwOTQgMTkuMTk1OTA2IDE2LjgwMDc4MSAyMC4wMDM5MDYgMTYuODAwNzgxIEMgMjAuODA0OTA2IDE2LjgwMDc4MSAyMS4zMzM5ODQgMTYuMDk3MDk0IDIxLjMzMzk4NCAxNC45OTYwOTQgQyAyMS4zMzI5ODQgMTMuOTAxMDk0IDIwLjgwMDkwNiAxMy4xOTkyMTkgMjAuMDAzOTA2IDEzLjE5OTIxOSB6Ii8+PC9zdmc+",
+  focal: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciICB2aWV3Qm94PSIwIDAgMzAgMzAiIHdpZHRoPSIxMDBweCIgaGVpZ2h0PSIxMDBweCI+PHBhdGggZD0iTSAyNi4wMjE0ODQgMi45OTQxNDA2IEEgMS4wMDAxIDEuMDAwMSAwIDAgMCAyNS41NjgzNTkgMy4wOTc2NTYyIEwgMi41NjgzNTk0IDE0LjA5NzY1NiBBIDEuMDAwMSAxLjAwMDEgMCAwIDAgMi41NjgzNTk0IDE1LjkwMjM0NCBMIDI1LjU2ODM1OSAyNi45MDIzNDQgQSAxLjAwMDI2OTMgMS4wMDAyNjkzIDAgMSAwIDI2LjQzMTY0MSAyNS4wOTc2NTYgTCAyNC4xODk0NTMgMjQuMDI1MzkxIEMgMjQuOTk1OTcgMjIuODAyNzg1IDI3IDE5LjM1MjA4NiAyNyAxNSBDIDI3IDEwLjY0NzkxNCAyNC45OTU5NyA3LjE5NzIxNTUgMjQuMTg5NDUzIDUuOTc0NjA5NCBMIDI2LjQzMTY0MSA0LjkwMjM0MzggQSAxLjAwMDEgMS4wMDAxIDAgMCAwIDI2LjAyMTQ4NCAyLjk5NDE0MDYgeiBNIDIyLjM2MzI4MSA2Ljg0NzY1NjIgQyAyMi43OTI5NDEgNy40NjY5NzE1IDI1IDEwLjgyOTE4OSAyNSAxNSBDIDI1IDE5LjE3MDgxMSAyMi43OTI5NDEgMjIuNTMzMDI4IDIyLjM2MzI4MSAyMy4xNTIzNDQgTCAxNi41ODk4NDQgMjAuMzkwNjI1IEMgMTcuNDYxNjgyIDE5LjQyMTUwNyAxOSAxNy4zODE1NzcgMTkgMTUgQyAxOSAxMi42MTg0MjMgMTcuNDYxNjgyIDEwLjU3ODQ5MyAxNi41ODk4NDQgOS42MDkzNzUgTCAyMi4zNjMyODEgNi44NDc2NTYyIHogTSAxNC42NzU3ODEgMTAuNTI1MzkxIEMgMTMuODcxMjc1IDExLjYyNDYgMTMgMTMuMjExMjczIDEzIDE1IEMgMTMgMTYuNzg4NzI3IDEzLjg3MTI3NSAxOC4zNzU0IDE0LjY3NTc4MSAxOS40NzQ2MDkgTCA1LjMxODM1OTQgMTUgTCAxNC42NzU3ODEgMTAuNTI1MzkxIHoiLz48L3N2Zz4=",
+  datetime: "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIj8+PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciICB2aWV3Qm94PSIwIDAgMzAgMzAiIHdpZHRoPSIxMDBweCIgaGVpZ2h0PSIxMDBweCI+ICAgIDxwYXRoIGQ9Ik0gOSAzIEEgMS4wMDAxIDEuMDAwMSAwIDAgMCA3Ljk4NjMyODEgNCBMIDcgNCBDIDUuODk5NzEyOSA0IDUuMDA5NTQyNyA0Ljg4NzgzNzIgNS4wMDE5NTMxIDUuOTg2MzI4MSBBIDEuMDAwMSAxLjAwMDEgMCAwIDAgNC45ODQzNzUgNS45ODYzMjgxIEEgMS4wMDAxIDEuMDAwMSAwIDAgMCA0IDcgTCA0IDkgQSAxLjAwMDEgMS4wMDAxIDAgMCAwIDUgMTAuMDEzNjcyIEwgNSAxOCBMIDI1IDE4IEwgMjUgMTAuMDEzNjcyIEEgMS4wMDAxIDEuMDAwMSAwIDAgMCAyNiA5IEwgMjYgNyBBIDEuMDAwMSAxLjAwMDEgMCAwIDAgMjQuOTk4MDQ3IDUuOTg2MzI4MSBDIDI0Ljk5MDQ1NyA0Ljg4NzgzNzIgMjQuMTAwMjg3IDQgMjMgNCBMIDE0LjAxMzY3MiA0IEEgMS4wMDAxIDEuMDAwMSAwIDAgMCAxMyAzIEwgOSAzIHogTSAxNSA2IEMgMTcuNzYxIDYgMjAgOC4yMzkgMjAgMTEgQyAyMCAxMy43NjEgMTcuNzYxIDE2IDE1IDE2IEMgMTIuMjM5IDE2IDEwIDEzLjc2MSAxMCAxMSBDIDEwIDguMjM5IDEyLjIzOSA2IDE1IDYgeiBNIDIxIDYgTCAyMyA2IEwgMjMgOCBMIDIxIDggTCAyMSA2IHogTSAxNSA4IEMgMTMuMzQzIDggMTIgOS4zNDMgMTIgMTEgQyAxMiAxMi42NTcgMTMuMzQzIDE0IDE1IDE0IEMgMTYuNjU3IDE0IDE4IDEyLjY1NyAxOCAxMSBDIDE4IDkuMzQzIDE2LjY1NyA4IDE1IDggeiBNIDUgMjAgQyAzLjg5NSAyMCAzIDIwLjg5NSAzIDIyIEwgMyAyNCBDIDMgMjUuMTA1IDMuODk1IDI2IDUgMjYgTCAyNSAyNiBDIDI2LjEwNSAyNiAyNyAyNS4xMDUgMjcgMjQgTCAyNyAyMiBDIDI3IDIwLjg5NSAyNi4xMDUgMjAgMjUgMjAgTCA1IDIwIHogTSA3IDIyIEwgMjMgMjIgQyAyMy41NTIgMjIgMjQgMjIuNDQ4IDI0IDIzIEMgMjQgMjMuNTUyIDIzLjU1MiAyNCAyMyAyNCBMIDcgMjQgQyA2LjQ0OCAyNCA2IDIzLjU1MiA2IDIzIEMgNiAyMi40NDggNi40NDggMjIgNyAyMiB6Ii8+PC9zdmc+",
+  camera: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciICB2aWV3Qm94PSIwIDAgMzAgMzAiIHdpZHRoPSIxMDBweCIgaGVpZ2h0PSIxMDBweCI+PHBhdGggZD0iTSA0IDUgQSAxLjAwMDEgMS4wMDAxIDAgMSAwIDQgNyBMIDE2IDcgQSAxLjAwMDEgMS4wMDAxIDAgMSAwIDE2IDUgTCA0IDUgeiBNIDQgOSBMIDQgMTIgQyA0IDEzLjEwNSA0Ljg5NSAxNCA2IDE0IEwgNSAxNCBDIDIuNzkxIDE0IDEgMTUuNzkxIDEgMTggTCAxIDIwIEMgMSAyMi4yMDkgMi43OTEgMjQgNSAyNCBMIDYuNTg1OTM3NSAyNCBMIDYuMjkyOTY4OCAyNC4yOTI5NjkgQSAxLjAwMDEgMS4wMDAxIDAgMSAwIDcuNzA3MDMxMiAyNS43MDcwMzEgTCA4LjQxNDA2MjUgMjUgTCAxMS41ODU5MzggMjUgTCAxMi4yOTI5NjkgMjUuNzA3MDMxIEEgMS4wMDAxIDEuMDAwMSAwIDEgMCAxMy43MDcwMzEgMjQuMjkyOTY5IEwgMTMuNDE0MDYyIDI0IEwgMjUgMjQgQyAyNy4yMDkgMjQgMjkgMjIuMjA5IDI5IDIwIEwgMjkgMTQgQyAyOSAxMS43OTEgMjcuMjA5IDEwIDI1IDEwIEMgMjIuNzkxIDEwIDIxIDExLjc5MSAyMSAxNCBMIDE0IDE0IEMgMTUuMTA1IDE0IDE2IDEzLjEwNSAxNiAxMiBMIDE2IDkgTCA0IDkgeiBNIDI1IDEyIEMgMjUuNTUyIDEyIDI2IDEyLjQ0OCAyNiAxMyBDIDI2IDEzLjU1MiAyNS41NTIgMTQgMjUgMTQgQyAyNC40NDggMTQgMjQgMTMuNTUyIDI0IDEzIEMgMjQgMTIuNDQ4IDI0LjQ0OCAxMiAyNSAxMiB6IE0gNyAxNyBMIDEzIDE3IEwgMTMgMjEgTCA3IDIxIEwgNyAxNyB6IE0gMjUgMTcgQyAyNi4xMDUgMTcgMjcgMTcuODk1IDI3IDE5IEMgMjcgMjAuMTA1IDI2LjEwNSAyMSAyNSAyMSBDIDIzLjg5NSAyMSAyMyAyMi4xMDUgMjMgMjEgQyAyMyAxNy44OTUgMjMuODk1IDE3IDI1IDE3IHoiLz48L3N2Zz4=",
+  lens: "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIj8+PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciICB2aWV3Qm94PSIwIDAgMzAgMzAiIHdpZHRoPSIxMDBweCIgaGVpZ2h0PSIxMDBweCI+ICAgIDxwYXRoIGQ9Ik0gOSA1IEEgMS4wMDAxIDEuMDAwMSAwIDEgMCA5IDcgTCAyMSA3IEEgMS4wMDAxIDEuMDAwMSAwIDEgMCAyMSA1IEwgOSA1IHogTSA4IDkgQyA2Ljg5NSA5IDYgOS44OTUgNiAxMSBMIDYgMTYgQyA2IDE2LjU1MiA2LjQ0OCAxNyA3IDE3IEwgMjMgMTcgQyAyMy41NTIgMTcgMjQgMTYuNTUyIDI0IDE2IEwgMjQgMTEgQyAyNCA5Ljg5NSAyMy4xMDUgOSAyMiA5IEwgOCA5IHogTSA3IDE5IEwgNyAyMCBDIDcgMjEuMTA1IDcuODk1IDIyIDkgMjIgTCAxMCAyMiBMIDEwIDIzIEMgMTAgMjQuMTA1IDEwLjg5NSAyNSAxMiAyNSBMIDE4IDI1IEMgMTkuMTA1IDI1IDIwIDI0LjEwNSAyMCAyMyBMIDIwIDIyIEwgMjEgMjIgQyAyMi4xMDUgMjIgMjMgMjEuMTA1IDIzIDIwIEwgMjMgMTkgTCA3IDE5IHoiLz48L3N2Zz4=",
+  copyright: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMCAzMCI+PGNpcmNsZSBjeD0iMTUiIGN5PSIxNSIgcj0iMTIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiLz48cGF0aCBkPSJNMTkgMTIuNUMxNy44IDExLjYgMTYuNSAxMSAxNSAxMWMtMi44IDAtNSAyLjItNSA1czIuMiA1IDUgNWMxLjQgMCAyLjcgLTAuNSAzLjYtMS40IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4=",
+  instagram: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMCAzMCI+PHJlY3QgeD0iNSIgeT0iNSIgd2lkdGg9IjIwIiBoZWlnaHQ9IjIwIiByeD0iNiIgcnk9IjYiIGZpbGw9Im5vbmUiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiLz48Y2lyY2xlIGN4PSIxNSIgY3k9IjE1IiByPSI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIi8+PGNpcmNsZSBjeD0iMjEuNSIgY3k9IjguNSIgcj0iMS41IiBmaWxsPSJjdXJyZW50Q29sb3IiLz48L3N2Zz4=",
+  website: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMCAzMCI+PGNpcmNsZSBjeD0iMTUiIGN5PSIxNSIgcj0iMTIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiLz48ZWxsaXBzZSBjeD0iMTUiIGN5PSIxNSIgcng9IjUiIHJ5PSIxMiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIvPjxsaW5lIHgxPSIzIiB5MT0iMTEiIHgyPSIyNyIgeTI9IjExIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIi8+PGxpbmUgeDE9IjMiIHkxPSIxOSIgeDI9IjI3IiB5Mj0iMTkiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiLz48L3N2Zz4=",
+};
+
+const ICONS = {};
+const ICON_KEYS = Object.keys(ICON_URIS);
+let iconsLoaded = 0;
+
+function preloadIcons(cb) {
+  ICON_KEYS.forEach(key => {
+    const img = new Image();
+    img.onload = () => { ICONS[key] = img; iconsLoaded++; if (iconsLoaded === ICON_KEYS.length) cb(); };
+    img.onerror = () => { iconsLoaded++; if (iconsLoaded === ICON_KEYS.length) cb(); };
+    img.src = ICON_URIS[key];
+  });
+}
+
+function drawIcon(ctx, key, x, y, size, alpha) {
+  const img = ICONS[key];
+  if (!img) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // tint white: draw to offscreen, composite
+  const off = document.createElement('canvas');
+  off.width = size; off.height = size;
+  const ox = off.getContext('2d');
+  ox.drawImage(img, 0, 0, size, size);
+  ox.globalCompositeOperation = 'source-in';
+  ox.fillStyle = '#ffffff';
+  ox.fillRect(0, 0, size, size);
+  ctx.drawImage(off, x, y, size, size);
+  ctx.restore();
+}
 // ══════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════
@@ -460,9 +572,29 @@ const S = {
 const CV = { W: 0, H: 0 };
 
 // ══════════════════════════════════════════
+// THEME
+// ══════════════════════════════════════════
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('theme-toggle');
+  btn.textContent = theme === 'light' ? '☾' : '☀';
+  btn.title = theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode';
+  localStorage.setItem('framedata-theme', theme);
+}
+
+window.toggleTheme = () => {
+  const current = document.documentElement.getAttribute('data-theme');
+  applyTheme(current === 'light' ? 'dark' : 'light');
+};
+
+// ══════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
+  // Apply saved theme (default dark)
+  const savedTheme = localStorage.getItem('framedata-theme') || 'dark';
+  applyTheme(savedTheme);
+
   loadFromStorage();
   setupDropZone();
   document.getElementById('lighting-notes').addEventListener('input', () => {
@@ -606,9 +738,43 @@ function setupDropZone() {
   const zone = document.getElementById('drop-zone');
   const fi   = document.getElementById('file-input');
   fi.addEventListener('change', e => { if (e.target.files[0]) loadImage(e.target.files[0]); });
+
+  // Local drop zone highlight
   zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
   zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
   zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('dragover'); if (e.dataTransfer.files[0]) loadImage(e.dataTransfer.files[0]); });
+
+  // ── Full-window drag & drop ──────────────────────
+  let dragCounter = 0; // track enter/leave across child elements
+
+  window.addEventListener('dragenter', e => {
+    e.preventDefault();
+    if (!e.dataTransfer.types.includes('Files')) return;
+    dragCounter++;
+    document.getElementById('global-drop-overlay').classList.add('visible');
+  });
+
+  window.addEventListener('dragleave', e => {
+    dragCounter--;
+    if (dragCounter <= 0) {
+      dragCounter = 0;
+      document.getElementById('global-drop-overlay').classList.remove('visible');
+    }
+  });
+
+  window.addEventListener('dragover', e => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  });
+
+  window.addEventListener('drop', e => {
+    e.preventDefault();
+    dragCounter = 0;
+    document.getElementById('global-drop-overlay').classList.remove('visible');
+    zone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) loadImage(file);
+  });
 }
 
 async function loadImage(file) {
@@ -864,8 +1030,7 @@ function pinchMid(t, canvas) {
 window.applyCrop = () => {
   S.cropApplied = true;
   showStage('preview');
-  // Ensure Material Symbols is loaded before rendering text
-  document.fonts.load(`24px 'Material Symbols Outlined'`).then(() => renderOverlay());
+  preloadIcons(() => renderOverlay());
 };
 
 window.cancelCrop = () => {
@@ -922,25 +1087,22 @@ function renderOverlay() {
     ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
   }
 
-  // Material Symbols codepoints:
-  // camera = \ue412, shutter_speed = \ue43d, iso = \ue3f4, eye_tracking = \uf5f3
-  // schedule (clock) = \ue8b5, photo_camera = \ue412, lens = \ue3fa
-  // copyright = \ue90c, alternate_email = \ue0e6, language = \ue80b
+  // Material Symbols codepoints for meta block (copyright, instagram, website)
   const ICON_FONT = `'Material Symbols Outlined'`;
   const stats = [
-    { icon:'\uf029', label: exif.aperture },   // camera
-    { icon:'\uf47d', label: exif.shutter  },   // shutter speed
-    { icon:'\uf480', label: exif.iso      },   // iso
-    { icon:'\ue3b5', label: exif.focal    },   // camera focal length
+    { icon:'aperture', label: exif.aperture },
+    { icon:'shutter',  label: exif.shutter  },
+    { icon:'iso',      label: exif.iso      },
+    { icon:'focal',    label: exif.focal    },
   ].filter(s => s.label && s.label !== '—');
 
   const meta = [];
-  if (showDT && exif.datetime && exif.datetime!=='—') meta.push({ icon:'\ue916', text:exif.datetime }); // schedule
-  if (exif.camera && exif.camera!=='—')               meta.push({ icon:'\ue412', text:exif.camera });   // photo_camera
-  if (exif.lens   && exif.lens!=='—')                 meta.push({ icon:'\uf20e', text:exif.lens });     // lens
-  if (showC && prof.name)                             meta.push({ icon:'\ue90c', text:prof.name });     // copyright
-  if (showI && prof.instagram)                        meta.push({ icon:'\ue0e6', text:prof.instagram }); // alternate_email
-  if (showW && prof.website)                          meta.push({ icon:'\ue80b', text:prof.website });  // language
+  if (showDT && exif.datetime && exif.datetime!=='—') meta.push({ icon:'datetime',  text:exif.datetime });
+  if (exif.camera && exif.camera!=='—')               meta.push({ icon:'camera',    text:exif.camera });
+  if (exif.lens   && exif.lens!=='—')                 meta.push({ icon:'lens',      text:exif.lens });
+  if (showC && prof.name)                             meta.push({ icon:'copyright', text:prof.name });
+  if (showI && prof.instagram)                        meta.push({ icon:'instagram', text:prof.instagram });
+  if (showW && prof.website)                          meta.push({ icon:'website',   text:prof.website });
 
   ctx.font = `bold ${MED}px 'Helvetica Neue',Arial,sans-serif`;
   const litLines = S.lightingNotes ? wrapText(ctx, S.lightingNotes, mxW - mx*0.2) : [];
@@ -959,10 +1121,10 @@ function renderOverlay() {
   let y = outH*0.5 + outH*(S.vOffsetPct/100) - totalH/2;
 
   stats.forEach(s => {
-    ctx.font=`${BIG*0.82}px ${ICON_FONT}`; ctx.fillStyle='rgba(255,255,255,0.55)';
-    ctx.fillText(s.icon, mx, y+BIG*0.80);
+    const iconSize = BIG * 0.85;
+    drawIcon(ctx, s.icon, mx, y + BIG*0.08, iconSize, 0.55);
     ctx.font=`bold ${BIG}px 'Helvetica Neue',Arial,sans-serif`; ctx.fillStyle='rgba(255,255,255,0.95)';
-    ctx.fillText(s.label, mx+BIG*1.1, y+BIG*0.85);
+    ctx.fillText(s.label, mx + iconSize * 1.7, y+BIG*0.85);
     y+=statH;
   });
   y+=gapS;
@@ -987,10 +1149,10 @@ function renderOverlay() {
       ctx.shadowOffsetY = S.shadowY   * (outW / 1000);
     }
     meta.forEach(m => {
-      ctx.font=`${SM*0.85}px ${ICON_FONT}`; ctx.fillStyle='rgba(255,255,255,0.44)';
-      ctx.fillText(m.icon, mx, y+SM*0.80);
+      const iconSize = SM * 0.85;
+      drawIcon(ctx, m.icon, mx, y + SM*0.05, iconSize, 0.44);
       ctx.font=`bold ${SM}px 'Helvetica Neue',Arial,sans-serif`; ctx.fillStyle='rgba(255,255,255,0.85)';
-      ctx.fillText(m.text, mx+SM*1.1, y+SM*0.82);
+      ctx.fillText(m.text, mx + iconSize * 1.7, y+SM*0.82);
       y+=metaH;
     });
   }
