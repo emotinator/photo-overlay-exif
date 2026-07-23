@@ -2146,9 +2146,29 @@ window.addCustomFont = async () => {
   const inp = document.getElementById('lay-font-input');
   const family = parseFontInput(inp.value);
   if (!family) { toast('Enter a font name or Google Fonts URL', 'error'); return; }
-  if (fontSpec(family)) { toast(`${family} is already available`, 'error'); return; }
+  // Case-insensitive check against curated + custom
+  const existing = allFonts().find(x => x.f.toLowerCase() === family.toLowerCase());
+  if (existing) {
+    if (existing.custom) { toast(`${existing.f} is already in your collection`, 'error'); inp.value = ''; return; }
+    // Built-in font: don't just say so — make it usable right now
+    ensureFontLoaded(existing.f, existing.w.includes(700) ? 700 : existing.w[0]);
+    const b = selBlock();
+    if (b && b.type === 'text') {
+      setBlockProp('family', existing.f);
+      toast(`${existing.f} is built in — applied to the selected block`, 'success');
+    } else {
+      toast(`${existing.f} is built in — pick it from the Font dropdown on any text block`, 'success');
+    }
+    inp.value = '';
+    return;
+  }
   toast(`Loading ${family}…`);
-  const spec = await fetchGoogleFont(family);
+  let spec = await fetchGoogleFont(family);
+  if (!spec) {
+    // retry with Title Case — the css2 API wants exact family capitalization
+    const tc = family.replace(/\w\S*/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase());
+    if (tc !== family) spec = await fetchGoogleFont(tc);
+  }
   if (!spec) { toast(`Couldn't find "${family}" on Google Fonts`, 'error'); return; }
   L.customFonts.push(spec);
   FONT_CSS_PROMISES[family] = Promise.resolve(true);   // css already injected this session
