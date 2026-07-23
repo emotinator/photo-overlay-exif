@@ -576,31 +576,13 @@
           </div>
         </div>
         <div class="section">
-          <div class="section-label">Aspect Ratio</div>
-          <div class="crop-toggle" id="lay-ratio-row">
-            <button class="crop-btn active" data-ratio="4:5" onclick="setLayoutCropRatio('4:5',this)">4 : 5</button>
-            <button class="crop-btn" data-ratio="1:1" onclick="setLayoutCropRatio('1:1',this)">1 : 1</button>
-            <button class="crop-btn" data-ratio="original" onclick="setLayoutCropRatio('original',this)">Original</button>
-          </div>
-          <div style="margin-top:10px;">
-            <button class="btn btn-ghost btn-sm btn-full" id="lay-recrop-btn" onclick="enterLayoutCropMode()" disabled>✂ Adjust Crop</button>
-          </div>
-        </div>
-        <div class="section">
-          <div class="section-label">Background Effects</div>
-          <div class="slider-row">
-            <span class="slider-label">Blur</span>
-            <input type="range" id="lay-blur-slider" min="0" max="30" value="0" oninput="updateLayoutSlider('blur',this,'px','lay-blur-val')">
-            <span class="slider-val" id="lay-blur-val">0px</span>
-          </div>
-          <div class="slider-row">
-            <span class="slider-label">Darken</span>
-            <input type="range" id="lay-darken-slider" min="0" max="85" value="0" oninput="updateLayoutSlider('darken',this,'%','lay-darken-val')">
-            <span class="slider-val" id="lay-darken-val">0%</span>
-          </div>
-        </div>
-        <div class="section">
           <div class="section-label">Border / Matte</div>
+          <div class="field-row" style="margin-bottom:10px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);">
+              <input type="checkbox" id="lay-border-precrop" onchange="setBorderPreCrop(this.checked)" style="accent-color:var(--accent);">Bake into image (pre-crop)
+            </label>
+            <div class="drop-text" style="text-align:left;font-size:12px;margin-top:5px;">ON: the border becomes part of the photo before cropping — the final image keeps the selected aspect ratio (e.g. a polaroid chin). OFF: the border is applied after cropping, per-edge IN/OUT.</div>
+          </div>
           <div class="slider-row">
             <span class="slider-label">Top</span>
             <input type="range" id="lay-border-top" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('top',+this.value)">
@@ -630,6 +612,31 @@
             <input type="color" id="lay-border-color" value="#ffffff" oninput="setBorderProp('color',this.value)" style="flex:1;">
           </div>
         </div>
+        <div class="section">
+          <div class="section-label">Aspect Ratio</div>
+          <div class="crop-toggle" id="lay-ratio-row">
+            <button class="crop-btn active" data-ratio="4:5" onclick="setLayoutCropRatio('4:5',this)">4 : 5</button>
+            <button class="crop-btn" data-ratio="1:1" onclick="setLayoutCropRatio('1:1',this)">1 : 1</button>
+            <button class="crop-btn" data-ratio="original" onclick="setLayoutCropRatio('original',this)">Original</button>
+          </div>
+          <div style="margin-top:10px;">
+            <button class="btn btn-ghost btn-sm btn-full" id="lay-recrop-btn" onclick="enterLayoutCropMode()" disabled>✂ Adjust Crop</button>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-label">Background Effects</div>
+          <div class="slider-row">
+            <span class="slider-label">Blur</span>
+            <input type="range" id="lay-blur-slider" min="0" max="30" value="0" oninput="updateLayoutSlider('blur',this,'px','lay-blur-val')">
+            <span class="slider-val" id="lay-blur-val">0px</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Darken</span>
+            <input type="range" id="lay-darken-slider" min="0" max="85" value="0" oninput="updateLayoutSlider('darken',this,'%','lay-darken-val')">
+            <span class="slider-val" id="lay-darken-val">0%</span>
+          </div>
+        </div>
+
       </div>
 
       <div class="tab-panel" id="tab-l-blocks">
@@ -1851,13 +1858,15 @@ window.exportSettings = async (format) => {
 // LAYOUT MODE — state
 // ══════════════════════════════════════════
 const L = {
-  imageFile: null, imageBitmap: null,
+  imageFile: null,
+  srcBitmap: null,      // pristine original — pre-crop bakes always start from this
+  imageBitmap: null,    // effective source: original, or original + baked border
   cropRatio: '4:5',
   crop: { scale: 1, offsetX: 0, offsetY: 0, outW: 0, outH: 0 },
   cropApplied: false,
   blur: 0, darken: 0,
   marginPct: 5, snap: 1,
-  border: { top: 0, right: 0, bottom: 0, left: 0, outside: { top: false, right: false, bottom: false, left: false }, color: '#ffffff' },
+  border: { top: 0, right: 0, bottom: 0, left: 0, outside: { top: false, right: false, bottom: false, left: false }, color: '#ffffff', preCrop: false },
   blocks: [], selectedId: null, nextId: 1,
   loadedFonts: [], customFonts: [],
 };
@@ -2094,7 +2103,10 @@ function textSpec(b, outW) {
 async function loadLayoutImage(file) {
   try {
     L.imageFile = file;
-    L.imageBitmap = await createImageBitmap(file);
+    L.isBlank = false;
+    L.srcBitmap = await createImageBitmap(file);
+    L._padL = 0; L._padT = 0;
+    rebuildLayoutSource();
     L.cropApplied = false;
     document.getElementById('lay-recrop-btn').disabled = false;
     enterLayoutCropMode();
@@ -2151,6 +2163,8 @@ function drawCroppedBackground(ctx, bitmap, crop, blurPx, darken, destW, destH) 
 // the image edges in place.
 function layoutBorder() {
   const b = L.border || {};
+  // Pre-crop borders are baked into the source bitmap — nothing post-crop to draw
+  if (b.preCrop) return { t: 0, r: 0, btm: 0, l: 0, oT: false, oR: false, oB: false, oL: false, color: b.color || '#ffffff', any: false };
   const o = b.outside || {};
   const u = L.crop.outW / 100;
   const t = (b.top || 0) * u, r = (b.right || 0) * u;
@@ -2160,6 +2174,50 @@ function layoutBorder() {
     oT: !!o.top, oR: !!o.right, oB: !!o.bottom, oL: !!o.left,
     color: b.color || '#ffffff', any: t + r + btm + l > 0,
   };
+}
+
+// ── Pre-crop bake: pad the ORIGINAL image with the border, then let the crop
+//    and every later stage treat the result as the photo. Always rebuilt from
+//    L.srcBitmap so adjustments re-bake cleanly instead of accumulating.
+function rebuildLayoutSource() {
+  if (!L.srcBitmap) return;
+  const b = L.border;
+  const prevL = L._padL || 0, prevT = L._padT || 0;
+  let l = 0, t = 0;
+  if (b.preCrop && ((b.top || 0) + (b.right || 0) + (b.bottom || 0) + (b.left || 0)) > 0) {
+    const u = L.srcBitmap.width / 100;
+    t = Math.round((b.top || 0) * u);
+    const r = Math.round((b.right || 0) * u);
+    const btm = Math.round((b.bottom || 0) * u);
+    l = Math.round((b.left || 0) * u);
+    const c = document.createElement('canvas');
+    c.width = L.srcBitmap.width + l + r;
+    c.height = L.srcBitmap.height + t + btm;
+    const x = c.getContext('2d');
+    x.fillStyle = b.color || '#ffffff';
+    x.fillRect(0, 0, c.width, c.height);
+    x.drawImage(L.srcBitmap, l, t);
+    L.imageBitmap = c;
+  } else {
+    L.imageBitmap = L.srcBitmap;
+  }
+  // Anchor the crop to the ORIGINAL content: shift offsets by the padding delta
+  L.crop.offsetX += (l - prevL) * L.crop.scale;
+  L.crop.offsetY += (t - prevT) * L.crop.scale;
+  L._padL = l; L._padT = t;
+}
+
+function refreshLayoutCropAfterSourceChange() {
+  if (!L.imageBitmap) return;
+  const d = getOutputDims(L.imageBitmap, L.cropRatio);
+  L.crop.outW = d.outW; L.crop.outH = d.outH;
+  clampOffsetFor({ bitmap: L.imageBitmap, crop: L.crop });
+  if (CROPX && CROPX.crop === L.crop && currentStage === 'crop') {
+    CROPX.bitmap = L.imageBitmap;
+    sizeCropCanvas(); drawCropViewport();
+  } else if (L.cropApplied) {
+    renderLayoutAll();
+  }
 }
 
 // Cropped image + blur + darken rendered to an exact-size canvas. Needed
@@ -2230,7 +2288,16 @@ window.setBorderProp = (key, val) => {
   L.border[key] = val;
   if (key !== 'color') document.getElementById('lay-border-' + key + '-val').textContent = val + '%';
   saveLayoutSettings();
-  if (L.cropApplied) renderLayoutAll();
+  if (L.border.preCrop) { rebuildLayoutSource(); refreshLayoutCropAfterSourceChange(); }
+  else if (L.cropApplied) renderLayoutAll();
+};
+
+window.setBorderPreCrop = on => {
+  L.border.preCrop = !!on;
+  updateBorderSideButtons();
+  saveLayoutSettings();
+  rebuildLayoutSource();
+  refreshLayoutCropAfterSourceChange();
 };
 
 window.toggleBorderSide = side => {
@@ -2247,6 +2314,7 @@ function updateBorderSideButtons() {
     const out = !!(L.border.outside && L.border.outside[s]);
     btn.textContent = out ? 'OUT' : 'IN';
     btn.classList.toggle('out', out);
+    btn.style.display = L.border.preCrop ? 'none' : '';   // IN/OUT is a post-crop concept
   });
 }
 
@@ -2951,6 +3019,7 @@ function loadLayoutStorage() {
       document.getElementById('lay-border-' + k).value = L.border[k];
       document.getElementById('lay-border-' + k + '-val').textContent = L.border[k] + '%';
     });
+    document.getElementById('lay-border-precrop').checked = !!L.border.preCrop;
     updateBorderSideButtons();
     document.getElementById('lay-border-color').value = L.border.color;
     document.getElementById('lay-blur-slider').value = L.blur;
