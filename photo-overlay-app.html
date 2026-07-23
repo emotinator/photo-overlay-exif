@@ -228,6 +228,10 @@
     pointer-events: none;
   }
 
+  .crop-zoom-row {
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 14px; width: 340px; max-width: 90%;
+  }
   .crop-hint {
     margin-top: 13px; font-size: 13px; color: var(--text3); font-family: 'DM Mono', monospace;
     text-align: center; letter-spacing: 0.03em;
@@ -302,21 +306,38 @@
   .lblock-handle[data-h="e"]  { top: calc(50% - 5px); right: -6px; cursor: ew-resize; }
   .lblock-handle[data-h="w"]  { top: calc(50% - 5px); left: -6px; cursor: ew-resize; }
 
-  /* ── Grid Stage (M0 mock) ── */
+  /* ── Grid Stage ── */
   #grid-stage { display: none; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 20px; }
   #grid-stage.active { display: flex; }
   .grid-frame {
-    display: flex; flex-direction: column;
-    height: calc(100vh - 58px - 58px - 120px); max-width: calc(100% - 8px);
-    background: var(--surface); border: 1px solid var(--border2); border-radius: 3px;
+    position: relative; border-radius: 3px; overflow: hidden;
     box-shadow: 0 8px 48px rgba(0,0,0,0.35);
   }
-  .grid-row { display: flex; flex: 1; min-height: 0; }
   .grid-cell {
-    flex: 1; background: var(--surface2); border: 1.5px dashed var(--border2); border-radius: 2px;
+    position: absolute; background: var(--surface2);
     display: flex; align-items: center; justify-content: center;
-    font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text3);
+    cursor: pointer; overflow: hidden;
   }
+  .grid-cell:not(.filled) { border: 1.5px dashed var(--border2); }
+  .grid-cell:not(.filled):hover, .grid-cell.dragover { border-color: var(--accent); background: var(--accent-dim); }
+  .grid-cell.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .grid-cell-num { position: absolute; top: 6px; left: 8px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text3); }
+  .grid-cell-plus { font-family: 'DM Mono', monospace; font-size: 22px; color: var(--text3); }
+  .grid-cell:not(.filled):hover .grid-cell-plus { color: var(--accent); }
+  .grid-cell-del {
+    position: absolute; top: 4px; right: 4px; width: 20px; height: 20px;
+    border-radius: 50%; border: none; background: rgba(0,0,0,0.55); color: #fff;
+    font-size: 13px; line-height: 1; cursor: pointer; display: none; z-index: 2;
+  }
+  .grid-cell.filled:hover .grid-cell-del { display: block; }
+  .grid-caption-band {
+    position: absolute; left: 0; right: 0; overflow: hidden;
+    display: flex; flex-direction: column; justify-content: center;
+    pointer-events: none;
+  }
+  .grid-cell-cap { position: absolute; white-space: pre; pointer-events: none; z-index: 3; }
+  .pos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; width: 126px; }
+  .pos-grid .crop-btn { padding: 5px 0; font-size: 13px; line-height: 1; }
   .count-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
   .count-grid .crop-btn { padding: 8px 0; }
 
@@ -832,24 +853,103 @@
           <div class="section-label">Gutter</div>
           <div class="slider-row">
             <span class="slider-label">Width</span>
-            <input type="range" id="grid-gutter" min="0" max="24" value="6" oninput="setGridGutter(+this.value)">
-            <span class="slider-val" id="grid-gutter-val">6px</span>
+            <input type="range" id="grid-gutter" min="0" max="6" step="0.25" value="1.5" oninput="setGridGutter(+this.value)">
+            <span class="slider-val" id="grid-gutter-val">1.5%</span>
+          </div>
+          <div class="field-row" style="display:flex;gap:10px;align-items:center;margin-top:6px;">
+            <div class="field-label" style="margin:0;flex:1;">Gutter / Background</div>
+            <input type="color" id="grid-gutter-color" value="#ffffff" oninput="setGridGutterColor(this.value)" style="flex:1;">
           </div>
         </div>
         <div class="section">
-          <div class="drop-text" style="text-align:left;">M0 mock — cells are placeholders. Per-cell images, cropping and export arrive in M3.</div>
+          <div class="drop-text" style="text-align:left;">Click a cell to add or re-crop its image · drop multiple files anywhere to fill empty cells in order</div>
         </div>
       </div>
       <div class="tab-panel" id="tab-g-cells">
         <div class="section">
           <div class="section-label">Cells</div>
-          <div class="preset-empty">Per-cell images &amp; crop — coming in M3</div>
+          <div class="preset-list" id="grid-cell-list" style="max-height:220px;"></div>
+          <button class="btn btn-ghost btn-sm btn-full" style="margin-top:8px;" onclick="clearAllGridCells()">Clear All</button>
         </div>
+        <input type="file" id="grid-cell-file" accept="image/*" style="display:none;">
       </div>
       <div class="tab-panel" id="tab-g-caption">
+        <div class="section" id="grid-cellcap-section">
+          <div class="section-label">Cell <span id="gcc-cellnum">1</span> Caption</div>
+          <div class="drop-text" style="text-align:left;font-size:12px;margin-bottom:10px;">Click a cell on the stage to switch which cell you're editing.</div>
+          <div class="field-row">
+            <div class="field-label">Text</div>
+            <input type="text" id="gcc-text" placeholder="e.g. 85mm · f1.4" oninput="setCellCapProp('text',this.value)">
+          </div>
+          <div class="field-row" style="display:flex;gap:14px;align-items:flex-start;">
+            <div>
+              <div class="field-label">Position</div>
+              <div class="pos-grid" id="gcc-pos"></div>
+            </div>
+            <div style="flex:1;">
+              <div class="field-label">Color</div>
+              <input type="color" id="gcc-color" value="#ffffff" oninput="setCellCapProp('color',this.value)">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-label">Font</div>
+            <select id="gcc-family" onchange="setCellCapProp('family',this.value)"></select>
+          </div>
+          <div class="slider-row" style="margin-top:10px;">
+            <span class="slider-label">Size</span>
+            <input type="range" id="gcc-size" min="1.5" max="10" step="0.1" oninput="setCellCapProp('sizePct',+this.value)">
+            <span class="slider-val" id="gcc-size-val">3%</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Offset</span>
+            <input type="range" id="gcc-offset" min="0" max="15" step="0.5" oninput="setCellCapProp('offsetPct',+this.value)">
+            <span class="slider-val" id="gcc-offset-val">3%</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Opacity</span>
+            <input type="range" id="gcc-opacity" min="5" max="100" oninput="setCellCapProp('opacity',+this.value)">
+            <span class="slider-val" id="gcc-opacity-val">100%</span>
+          </div>
+          <div class="field-row" style="margin-top:6px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);">
+              <input type="checkbox" id="gcc-shadow" checked onchange="setCellCapProp('shadow',this.checked)" style="accent-color:var(--accent);">Drop shadow
+            </label>
+          </div>
+        </div>
         <div class="section">
-          <div class="section-label">Caption</div>
-          <div class="preset-empty">Caption band — coming in M3</div>
+          <div class="section-label">Caption Band</div>
+          <div class="field-row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);">
+              <input type="checkbox" id="grid-cap-on" onchange="setCaptionProp('enabled',this.checked)" style="accent-color:var(--accent);">Show caption band below grid
+            </label>
+          </div>
+          <div class="field-row">
+            <div class="field-label">Text</div>
+            <textarea id="grid-cap-text" rows="3" placeholder="e.g. Studio sessions — spring 2026" oninput="setCaptionProp('text',this.value)"></textarea>
+          </div>
+          <div class="field-row">
+            <div class="field-label">Font</div>
+            <select id="grid-cap-family" onchange="setCaptionProp('family',this.value)"></select>
+          </div>
+          <div class="field-row">
+            <div class="field-label">Align</div>
+            <div class="crop-toggle">
+              <button class="crop-btn" id="grid-cap-align-left" onclick="setCaptionProp('align','left')">Left</button>
+              <button class="crop-btn active" id="grid-cap-align-center" onclick="setCaptionProp('align','center')">Center</button>
+              <button class="crop-btn" id="grid-cap-align-right" onclick="setCaptionProp('align','right')">Right</button>
+            </div>
+          </div>
+          <div class="slider-row" style="margin-top:12px;">
+            <span class="slider-label">Size</span>
+            <input type="range" id="grid-cap-size" min="1" max="6" step="0.1" oninput="setCaptionProp('sizePct',+this.value)">
+            <span class="slider-val" id="grid-cap-size-val">2.2%</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Band Ht</span>
+            <input type="range" id="grid-cap-height" min="5" max="22" step="0.5" oninput="setCaptionProp('heightPct',+this.value)">
+            <span class="slider-val" id="grid-cap-height-val">10%</span>
+          </div>
+          <div class="drop-text" style="text-align:left;font-size:12px;">The band adds to the export height; text color auto-contrasts with the gutter color.</div>
         </div>
       </div>
     </div><!-- /pane-grid -->
@@ -872,8 +972,13 @@
         <canvas id="crop-grid-canvas"></canvas>
         <div class="zoom-pill" id="zoom-pill">100%</div>
       </div>
+      <div class="crop-zoom-row">
+        <span class="slider-label" style="width:auto;">Zoom</span>
+        <input type="range" id="crop-zoom" min="100" max="500" value="100" oninput="setCropZoom(+this.value)">
+        <span class="slider-val" id="crop-zoom-val" style="width:48px;">100%</span>
+      </div>
       <div class="crop-hint">
-        Drag to pan &nbsp;·&nbsp; <kbd>Scroll</kbd> / pinch to zoom &nbsp;·&nbsp; <kbd>R</kbd> reset
+        Drag to pan &nbsp;·&nbsp; <kbd>Scroll</kbd> / pinch or slider to zoom &nbsp;·&nbsp; <kbd>R</kbd> reset
       </div>
       <div class="crop-actions">
         <button class="btn btn-ghost" onclick="cancelCrop()">Cancel</button>
@@ -910,11 +1015,17 @@
       </div>
     </div>
 
-    <!-- GRID STAGE (M0 mock) -->
+    <!-- GRID STAGE -->
     <div id="grid-stage">
       <div class="grid-frame" id="grid-frame"></div>
-      <div class="crop-hint" style="margin-top:13px;">
-        Pick a cell count &amp; ratio in the sidebar — placeholder cells only in M0
+      <div class="preview-actions">
+        <span class="preview-dim" id="grid-selcell-label"></span>
+        <button class="btn btn-ghost btn-sm" id="grid-recrop-btn" onclick="recropSelectedCell()">✂ Re-crop</button>
+        <button class="btn btn-ghost btn-sm" id="grid-replace-btn" onclick="pickGridCellImage(G.selCell)">+ Add Image</button>
+        <button class="btn btn-ghost btn-sm" id="grid-clearcell-btn" onclick="clearGridCell(G.selCell)" style="color:var(--red);">✕ Clear</button>
+      </div>
+      <div class="crop-hint" style="margin-top:8px;">
+        Click a cell to select &nbsp;·&nbsp; drop files to fill &nbsp;·&nbsp; <span id="grid-dim" style="color:var(--text2);"></span>
       </div>
     </div>
 
@@ -1048,11 +1159,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('layout-stage').classList.contains('active') && S.layout.cropApplied) {
       renderLayoutAll();
     }
+    if (document.getElementById('grid-stage').classList.contains('active')) {
+      renderGridAll();
+    }
   });
 
   initCropEvents();
   initLayoutMode();
-  initGridPicker();
+  initGridMode();
 
   const savedMode = localStorage.getItem('framedata-mode');
   if (savedMode === 'layout' || savedMode === 'grid') switchMode(savedMode);
@@ -1185,6 +1299,7 @@ window.switchMode = mode => {
     primeLayoutFonts();
     if (currentStage === 'layout' && S.layout.cropApplied) requestAnimationFrame(renderLayoutAll);
   }
+  if (mode === 'grid') requestAnimationFrame(renderGridAll);
 };
 
 // ══════════════════════════════════════════
@@ -1237,8 +1352,8 @@ function setupDropZone() {
     dragCounter = 0;
     document.getElementById('global-drop-overlay').classList.remove('visible');
     zone.classList.remove('dragover');
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) routeImageFile(file);
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    if (files.length) routeImageFiles(files);
   });
 
   // ── Paste from clipboard ───────────────────────
@@ -1249,18 +1364,19 @@ function setupDropZone() {
       if (item.type.startsWith('image/')) {
         e.preventDefault();
         const file = item.getAsFile();
-        if (file) routeImageFile(file);
+        if (file) routeImageFiles([file]);
         return;
       }
     }
   });
 }
 
-// Window-level drops & pastes go to the active mode's pipeline
-function routeImageFile(file) {
-  if (MODE === 'layout') loadLayoutImage(file);
-  else if (MODE === 'grid') toast('Dropping into Grid cells arrives in M3', 'error');
-  else loadImage(file);
+// Window-level drops & pastes go to the active mode's pipeline;
+// grid mode accepts multiple files and fills empty cells in order.
+function routeImageFiles(files) {
+  if (MODE === 'layout') loadLayoutImage(files[0]);
+  else if (MODE === 'grid') fillGridCells(files);
+  else loadImage(files[0]);
 }
 
 async function loadImage(file) {
@@ -1440,8 +1556,17 @@ function drawCropViewport() {
     gx.beginPath(); gx.moveTo(cx+dx*bl,cy+dy*1); gx.lineTo(cx+dx*1,cy+dy*1); gx.lineTo(cx+dx*1,cy+dy*bl); gx.stroke();
   });
 
-  document.getElementById('zoom-pill').textContent = Math.round(CROPX.crop.scale*100)+'%';
+  const zoomPct = Math.round(CROPX.crop.scale * 100);
+  document.getElementById('zoom-pill').textContent = zoomPct + '%';
+  document.getElementById('crop-zoom').value = zoomPct;
+  document.getElementById('crop-zoom-val').textContent = zoomPct + '%';
 }
+
+// Slider zoom pivots on the viewport center (wheel/pinch pivot on the cursor)
+window.setCropZoom = v => {
+  if (!CROPX) return;
+  applyZoomFactor((v / 100) / CROPX.crop.scale, CV.W / 2, CV.H / 2, document.getElementById('crop-canvas'));
+};
 
 // ── Drag / Zoom ──────────────────────────────────────
 let drag = null;
@@ -1524,14 +1649,16 @@ function applyZoomFactor(factor, cx, cy, canvas) {
   // cx, cy in display pixels
   const { outW, outH, scale } = CROPX.crop;
   const newScale = Math.max(1, Math.min(5, scale * factor));
-  // Pivot: point under cursor should stay fixed
-  // cursor in "scaled image px": cx / (CV.W/outW) + offsetX, but simpler:
-  // offsetX_new = cursor_scaled_px * (1 - newScale/oldScale) + offsetX * newScale/oldScale
-  const dispToScaled = outW / CV.W; // scaled-img-px per display-px
-  const cursorSX = cx * dispToScaled + CROPX.crop.offsetX; // cursor in scaled-img-px
-  const cursorSY = cy * (outH / CV.H) + CROPX.crop.offsetY;
-  CROPX.crop.offsetX = cursorSX - cx * dispToScaled * (newScale / scale);
-  CROPX.crop.offsetY = cursorSY - cy * (outH / CV.H) * (newScale / scale);
+  const ratio = newScale / scale;
+  // Pivot: the source point under the cursor stays fixed. Its scaled-space
+  // coordinate scales with the image, so:
+  //   offset_new = cursor_scaled_px * ratio − cursor_display_offset_in_scaled_px
+  const dispToScaledX = outW / CV.W; // scaled-img-px per display-px
+  const dispToScaledY = outH / CV.H;
+  const cursorSX = cx * dispToScaledX + CROPX.crop.offsetX; // cursor in scaled-img-px
+  const cursorSY = cy * dispToScaledY + CROPX.crop.offsetY;
+  CROPX.crop.offsetX = cursorSX * ratio - cx * dispToScaledX;
+  CROPX.crop.offsetY = cursorSY * ratio - cy * dispToScaledY;
   CROPX.crop.scale = newScale;
   clampOffset(); drawCropViewport();
 }
@@ -1791,7 +1918,7 @@ async function saveCanvas(canvas, format, filenameBase) {
 
 window.exportImage = async (format) => {
   if (MODE === 'layout') { exportLayoutImage(format); return; }
-  if (MODE === 'grid')   { toast('Grid export arrives in M3', 'error'); return; }
+  if (MODE === 'grid')   { exportGridImage(format); return; }
   const canvas = document.getElementById('preview');
   if (!canvas.width) { toast('No image to export', 'error'); return; }
   const base = S.imageFile ? S.imageFile.name.replace(/\.[^.]+$/, '') : 'export';
@@ -3208,7 +3335,7 @@ function initLayoutMode() {
 }
 
 // ══════════════════════════════════════════
-// GRID MODE — M0 mock (layout picker + placeholder cells)
+// GRID MODE — multi-image grid composer
 // ══════════════════════════════════════════
 // Each entry: array of variants; each variant: cells-per-row spec.
 // Variant 0 = default; variants only for counts 2–3 (horizontal / vertical).
@@ -3226,54 +3353,519 @@ const GRID_SPECS = {
   11: [[3,4,4]],
   12: [[4,4,4]],
 };
-const G0 = { ratio: '1:1', count: 4, variant: 0, gutter: 6 };
 
-window.setGridCount = n => {
-  G0.count = n;
-  if (!GRID_SPECS[n][G0.variant]) G0.variant = 0;
-  document.querySelectorAll('#grid-count-picker .crop-btn').forEach(b => b.classList.toggle('active', +b.textContent === n));
-  document.getElementById('grid-variant-section').style.display = GRID_SPECS[n].length > 1 ? '' : 'none';
-  renderGridMock();
-};
-window.setGridVariant = v => {
-  G0.variant = v;
-  document.getElementById('grid-var-h').classList.toggle('active', v === 0);
-  document.getElementById('grid-var-v').classList.toggle('active', v === 1);
-  renderGridMock();
-};
-window.setGridRatio = r => {
-  G0.ratio = r;
-  document.getElementById('grid-ratio-11').classList.toggle('active', r === '1:1');
-  document.getElementById('grid-ratio-45').classList.toggle('active', r === '4:5');
-  renderGridMock();
-};
-window.setGridGutter = v => {
-  G0.gutter = v;
-  document.getElementById('grid-gutter-val').textContent = v + 'px';
-  renderGridMock();
+const G = {
+  ratio: '1:1', count: 4, variant: 0,
+  gutterPct: 1.5, gutterColor: '#ffffff',
+  cells: [],       // sparse, index-aligned: { file, bitmap, crop, cropApplied, caption } — not persisted
+  selCell: null,   // Cells-tab selection for per-cell caption editing
+  caption: { enabled: false, text: '', family: 'Helvetica Neue', sizePct: 2.2, align: 'center', heightPct: 10 },
 };
 
-function renderGridMock() {
-  const frame = document.getElementById('grid-frame');
-  const rows = GRID_SPECS[G0.count][G0.variant] || GRID_SPECS[G0.count][0];
-  frame.style.aspectRatio = G0.ratio === '1:1' ? '1 / 1' : '4 / 5';
-  frame.style.gap = G0.gutter + 'px';
-  frame.style.padding = G0.gutter + 'px';
-  let i = 1;
-  frame.innerHTML = rows.map(cols =>
-    `<div class="grid-row" style="gap:${G0.gutter}px">` +
-    Array.from({ length: cols }, () => `<div class="grid-cell">${i++}</div>`).join('') +
-    `</div>`
-  ).join('');
+// Per-cell caption: anchored to a corner / edge-center / center of its cell,
+// pushed inward by offset; sizes are % of the CELL width so captions scale
+// with the layout.
+function capDefaults() {
+  return { text: '', pos: 'bc', offsetPct: 3, family: 'Helvetica Neue', sizePct: 3, color: '#ffffff', opacity: 100, shadow: true };
+}
+S.grid = G;
+const GV = { W: 0, H: 0, capH: 0 };   // display metrics
+
+function gridSpec() { return GRID_SPECS[G.count][G.variant] || GRID_SPECS[G.count][0]; }
+function cellCount() { return gridSpec().reduce((a, b) => a + b, 0); }
+
+// Cell rects for a grid of width W: equal-height rows, equal-width cells per
+// row, one gutter width between cells and as the outer frame.
+function gridGeometry(W) {
+  const spec = gridSpec();
+  const H = G.ratio === '1:1' ? W : W * 5 / 4;
+  const g = G.gutterPct / 100 * W;
+  const R = spec.length;
+  const cellH = (H - (R + 1) * g) / R;
+  const rects = [];
+  let i = 0;
+  spec.forEach((cols, r) => {
+    const cellW = (W - (cols + 1) * g) / cols;
+    for (let c = 0; c < cols; c++) {
+      rects.push({ i: i++, x: g + c * (cellW + g), y: g + r * (cellH + g), w: cellW, h: cellH });
+    }
+  });
+  return { rects, H, g };
 }
 
-function initGridPicker() {
+function cellAspect(i) {
+  const r = gridGeometry(1000).rects[i];
+  return { w: r.w, h: r.h };
+}
+
+// Export width: the weakest filled cell's native sampled resolution drives it,
+// clamped to [1600, 4096]. Empty grid defaults to 2048.
+function gridExportWidth() {
+  let minW = Infinity;
+  gridGeometry(1000).rects.forEach(r => {
+    const cell = G.cells[r.i];
+    if (cell && cell.bitmap) {
+      minW = Math.min(minW, (cell.crop.outW / cell.crop.scale) / (r.w / 1000));
+    }
+  });
+  return Math.round(Math.max(1600, Math.min(4096, minW === Infinity ? 2048 : minW)));
+}
+
+function contrastColor(hex) {
+  try {
+    const n = parseInt(hex.slice(1), 16);
+    return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) > 140 ? '#000000' : '#ffffff';
+  } catch { return '#000000'; }
+}
+
+// ── Controls ───────────────────────────────────────────────────────────────
+window.setGridCount = n => {
+  G.count = n;
+  if (!GRID_SPECS[n][G.variant]) G.variant = 0;
+  document.querySelectorAll('#grid-count-picker .crop-btn').forEach(b => b.classList.toggle('active', +b.textContent === n));
+  document.getElementById('grid-variant-section').style.display = GRID_SPECS[n].length > 1 ? '' : 'none';
+  onGridGeometryChange();
+};
+window.setGridVariant = v => {
+  G.variant = v;
+  document.getElementById('grid-var-h').classList.toggle('active', v === 0);
+  document.getElementById('grid-var-v').classList.toggle('active', v === 1);
+  onGridGeometryChange();
+};
+window.setGridRatio = r => {
+  G.ratio = r;
+  document.getElementById('grid-ratio-11').classList.toggle('active', r === '1:1');
+  document.getElementById('grid-ratio-45').classList.toggle('active', r === '4:5');
+  onGridGeometryChange();
+};
+window.setGridGutter = v => {
+  G.gutterPct = v;
+  document.getElementById('grid-gutter-val').textContent = v + '%';
+  onGridGeometryChange();
+};
+window.setGridGutterColor = v => {
+  G.gutterColor = v;
+  saveGridSettings();
+  renderGridAll();
+};
+window.setCaptionProp = (key, val) => {
+  G.caption[key] = val;
+  if (key === 'sizePct') document.getElementById('grid-cap-size-val').textContent = val + '%';
+  if (key === 'heightPct') document.getElementById('grid-cap-height-val').textContent = val + '%';
+  if (key === 'align') ['left', 'center', 'right'].forEach(a =>
+    document.getElementById('grid-cap-align-' + a).classList.toggle('active', val === a));
+  if (key === 'family') ensureFontLoaded(val, 400).then(() => renderGridAll());
+  saveGridSettings();
+  renderGridAll();
+};
+
+// Geometry changed → cell aspects changed: recentre each filled cell's crop
+// at its new aspect (cells stay independently re-croppable afterwards).
+function onGridGeometryChange() {
+  G.cells.forEach((cell, i) => {
+    if (cell && cell.bitmap && i < cellCount()) {
+      resetCropState({ bitmap: cell.bitmap, aspect: cellAspect(i), crop: cell.crop });
+      cell.cropApplied = true;
+    }
+  });
+  saveGridSettings();
+  renderGridAll();
+  renderCellList();
+  updateCellCapPanel();   // selection may now be out of range
+}
+
+// ── Per-cell caption editing ───────────────────────────────────────────────
+window.selectGridCell = i => {
+  G.selCell = i;
+  renderCellList();
+  updateCellCapPanel();
+  renderGridAll();   // stage highlight + context actions
+};
+
+window.recropSelectedCell = () => {
+  if (G.selCell !== null && G.selCell !== undefined) enterGridCellCrop(G.selCell);
+};
+
+function updateGridCellActions() {
+  const i = G.selCell;
+  const has = i !== null && i !== undefined && i < cellCount();
+  const cell = has ? G.cells[i] : null;
+  const filled = !!(cell && cell.bitmap);
+  document.getElementById('grid-selcell-label').textContent = has ? `Cell ${i + 1}${filled ? '' : ' · empty'}` : '';
+  document.getElementById('grid-recrop-btn').disabled = !filled;
+  document.getElementById('grid-replace-btn').disabled = !has;
+  document.getElementById('grid-replace-btn').textContent = filled ? '⇄ Replace' : '+ Add Image';
+  document.getElementById('grid-clearcell-btn').disabled = !(filled || (cell && cell.caption && cell.caption.text.trim()));
+}
+
+window.setCellCapProp = (key, val) => {
+  const i = G.selCell;
+  if (i === null || i === undefined || i >= cellCount()) return;
+  if (!G.cells[i]) G.cells[i] = {};   // caption-only cells are allowed (text tiles)
+  const cell = G.cells[i];
+  cell.caption = cell.caption || capDefaults();
+  cell.caption[key] = val;
+  if (key === 'sizePct') document.getElementById('gcc-size-val').textContent = val + '%';
+  if (key === 'offsetPct') document.getElementById('gcc-offset-val').textContent = val + '%';
+  if (key === 'opacity') document.getElementById('gcc-opacity-val').textContent = val + '%';
+  if (key === 'pos') updateCellCapPanel();
+  if (key === 'family') {
+    const sp = fontSpec(val);
+    if (sp && !sp.sys) ensureFontLoaded(val, 400).then(() => renderGridAll());
+  }
+  renderGridAll();
+};
+
+function updateCellCapPanel() {
+  const n = cellCount();
+  if (G.selCell === null || G.selCell === undefined || G.selCell >= n) G.selCell = 0;
+  const i = G.selCell;
+  document.getElementById('gcc-cellnum').textContent = i + 1;
+  const cap = (G.cells[i] && G.cells[i].caption) || capDefaults();
+  document.getElementById('gcc-text').value = cap.text;
+  document.querySelectorAll('#gcc-pos .crop-btn').forEach(b => b.classList.toggle('active', b.dataset.pos === cap.pos));
+  document.getElementById('gcc-family').innerHTML = allFonts().map(o =>
+    `<option value="${escapeHtml(o.f)}"${o.f === cap.family ? ' selected' : ''}>${escapeHtml(o.f)}</option>`).join('');
+  document.getElementById('gcc-size').value = cap.sizePct;
+  document.getElementById('gcc-size-val').textContent = cap.sizePct + '%';
+  document.getElementById('gcc-offset').value = cap.offsetPct;
+  document.getElementById('gcc-offset-val').textContent = cap.offsetPct + '%';
+  document.getElementById('gcc-opacity').value = cap.opacity ?? 100;
+  document.getElementById('gcc-opacity-val').textContent = (cap.opacity ?? 100) + '%';
+  document.getElementById('gcc-shadow').checked = cap.shadow !== false;
+  document.getElementById('gcc-color').value = cap.color;
+}
+
+// ── Cell images & per-cell crop (shared crop stage) ────────────────────────
+async function loadGridCellImage(i, file, openCropStage) {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const prevCaption = G.cells[i] && G.cells[i].caption;   // keep caption on caption-only cells
+    const cell = { file, bitmap, crop: { scale: 1, offsetX: 0, offsetY: 0, outW: 0, outH: 0 }, cropApplied: false, caption: prevCaption };
+    G.cells[i] = cell;
+    resetCropState({ bitmap, aspect: cellAspect(i), crop: cell.crop });
+    cell.cropApplied = true;   // centered default; refine via re-crop
+    if (openCropStage) enterGridCellCrop(i);
+    else renderGridAll();
+    renderCellList();
+  } catch (e) { toast('Could not load image', 'error'); console.error('loadGridCellImage:', e); }
+}
+
+window.enterGridCellCrop = i => {
+  const cell = G.cells[i];
+  if (!cell || !cell.bitmap) return;
+  openCrop({
+    bitmap: cell.bitmap, aspect: cellAspect(i), crop: cell.crop, applied: cell.cropApplied,
+    onApply:  () => { cell.cropApplied = true; showStage('grid'); renderGridAll(); },
+    onCancel: () => { showStage('grid'); renderGridAll(); },
+  });
+};
+
+window.clearGridCell = i => { G.cells[i] = null; renderGridAll(); renderCellList(); };
+window.clearAllGridCells = () => { G.cells = []; renderGridAll(); renderCellList(); };
+window.pickGridCellImage = i => {
+  const fi = document.getElementById('grid-cell-file');
+  fi.dataset.cell = i;
+  fi.click();
+};
+
+// Multi-file fill: reserve empty slots synchronously, then load concurrently
+function fillGridCells(files) {
+  const n = cellCount();
+  const targets = [];
+  for (let i = 0; i < n && targets.length < files.length; i++) {
+    if (!G.cells[i] || !G.cells[i].bitmap) targets.push(i);
+  }
+  if (!targets.length) { toast('All cells are full', 'error'); return; }
+  targets.forEach(idx => { G.cells[idx] = { reserved: true, caption: G.cells[idx] && G.cells[idx].caption }; });
+  targets.forEach((idx, j) => loadGridCellImage(idx, files[j], false));
+  if (files.length > targets.length) toast(`${files.length - targets.length} file(s) skipped — grid is full`, 'error');
+}
+
+// ── Preview render ─────────────────────────────────────────────────────────
+function renderGridAll() {
+  sizeGridStage();
+  renderGridCellsDom();
+  updateGridCellActions();
+  const ew = gridExportWidth();
+  const capH = G.caption.enabled ? Math.round(G.caption.heightPct / 100 * ew) : 0;
+  const eh = Math.round((G.ratio === '1:1' ? ew : ew * 5 / 4) + capH);
+  document.getElementById('grid-dim').textContent = `${ew} × ${eh}px export`;
+}
+
+function sizeGridStage() {
+  const area = document.getElementById('canvas-area');
+  const aw = area.clientWidth - 48, ah = area.clientHeight - 120;
+  const capFrac = G.caption.enabled ? G.caption.heightPct / 100 : 0;
+  const unitH = (G.ratio === '1:1' ? 1 : 1.25) + capFrac;
+  let W = aw, H = W * unitH;
+  if (H > ah) { H = ah; W = H / unitH; }
+  GV.W = Math.floor(W);
+  GV.capH = Math.round(capFrac * GV.W);
+  GV.H = Math.round(GV.W * (G.ratio === '1:1' ? 1 : 1.25)) + GV.capH;
+  const frame = document.getElementById('grid-frame');
+  frame.style.width = GV.W + 'px';
+  frame.style.height = GV.H + 'px';
+  frame.style.background = G.gutterColor;
+}
+
+function renderGridCellsDom() {
+  const frame = document.getElementById('grid-frame');
+  frame.innerHTML = '';
+  const { rects } = gridGeometry(GV.W);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  rects.forEach(r => {
+    const cell = G.cells[r.i];
+    const filled = cell && cell.bitmap;
+    const div = document.createElement('div');
+    div.className = 'grid-cell' + (filled ? ' filled' : '') + (G.selCell === r.i ? ' selected' : '');
+    div.style.left = r.x + 'px'; div.style.top = r.y + 'px';
+    div.style.width = r.w + 'px'; div.style.height = r.h + 'px';
+    if (filled) {
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(r.w * dpr));
+      cv.height = Math.max(1, Math.round(r.h * dpr));
+      cv.style.cssText = 'width:100%;height:100%;display:block;';
+      const { outW, outH, scale, offsetX, offsetY } = cell.crop;
+      cv.getContext('2d').drawImage(cell.bitmap,
+        offsetX / scale, offsetY / scale, outW / scale, outH / scale,
+        0, 0, cv.width, cv.height);
+      div.appendChild(cv);
+      const del = document.createElement('button');
+      del.className = 'grid-cell-del'; del.textContent = '×'; del.title = 'Remove image';
+      del.onclick = ev => { ev.stopPropagation(); clearGridCell(r.i); };
+      div.appendChild(del);
+    } else {
+      div.innerHTML = `<span class="grid-cell-num">${r.i + 1}</span><span class="grid-cell-plus">+</span>`;
+    }
+    if (cell && cell.caption && cell.caption.text.trim()) {
+      const cap = cell.caption;
+      const sizePx = cap.sizePct / 100 * r.w;
+      const off = cap.offsetPct / 100 * r.w;
+      const cd = document.createElement('div');
+      cd.className = 'grid-cell-cap';
+      cd.textContent = cap.text;
+      let css = `font-family:"${cap.family}",'Helvetica Neue',Arial,sans-serif;` +
+                `font-size:${sizePx}px;line-height:${sizePx * 1.2}px;color:${cap.color};` +
+                `opacity:${(cap.opacity ?? 100) / 100};`;
+      if (cap.shadow !== false) css += `text-shadow:0 ${sizePx * 0.06}px ${sizePx * 0.12}px rgba(0,0,0,0.6);`;
+      const row = cap.pos[0], col = cap.pos[1];
+      if (row === 't') css += `top:${off}px;`;
+      else if (row === 'b') css += `bottom:${off}px;`;
+      else css += 'top:50%;transform:translateY(-50%);';
+      if (col === 'l') css += `left:${off}px;text-align:left;`;
+      else if (col === 'r') css += `right:${off}px;text-align:right;`;
+      else css += 'left:0;right:0;text-align:center;';
+      cd.style.cssText = css;
+      div.appendChild(cd);
+    }
+    div.onclick = () => {
+      selectGridCell(r.i);                      // click selects — actions are explicit buttons
+      if (!filled) pickGridCellImage(r.i);      // empty cells still open the picker directly
+    };
+    div.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); div.classList.add('dragover'); });
+    div.addEventListener('dragleave', () => div.classList.remove('dragover'));
+    div.addEventListener('drop', e => {
+      e.preventDefault(); e.stopPropagation();
+      div.classList.remove('dragover');
+      document.getElementById('global-drop-overlay').classList.remove('visible');
+      const f = e.dataTransfer.files[0];
+      if (f && f.type.startsWith('image/')) { G.selCell = r.i; loadGridCellImage(r.i, f, true); }
+    });
+    frame.appendChild(div);
+  });
+  if (G.caption.enabled) {
+    const band = document.createElement('div');
+    band.className = 'grid-caption-band';
+    band.style.top = (GV.H - GV.capH) + 'px';
+    band.style.height = GV.capH + 'px';
+    if (G.caption.text.trim()) {
+      const sizePx = G.caption.sizePct / 100 * GV.W;
+      const spec = { text: G.caption.text, family: G.caption.family, weight: 400, italic: false,
+                     sizePx, letterSpacingEm: 0, lineHeight: 1.35, maxWpx: GV.W * 0.9 };
+      const m = measureWrap(spec);
+      band.style.color = contrastColor(G.gutterColor);
+      m.lines.forEach(line => {
+        const ld = document.createElement('div');
+        ld.textContent = line || ' ';
+        ld.style.cssText = `font-family:"${G.caption.family}",'Helvetica Neue',Arial,sans-serif;` +
+          `font-size:${sizePx}px;line-height:${m.lineHPx}px;text-align:${G.caption.align};white-space:pre;padding:0 5%;`;
+        band.appendChild(ld);
+      });
+    }
+    frame.appendChild(band);
+  }
+}
+
+function renderCellList() {
+  const list = document.getElementById('grid-cell-list');
+  if (!list) return;
+  const n = cellCount();
+  let html = '';
+  for (let i = 0; i < n; i++) {
+    const cell = G.cells[i];
+    const filled = cell && cell.bitmap;
+    const hasCap = cell && cell.caption && cell.caption.text.trim();
+    const name = filled && cell.file ? escapeHtml(cell.file.name.length > 16 ? cell.file.name.slice(0, 16) + '…' : cell.file.name)
+                                     : '<span style="opacity:0.55;">empty</span>';
+    html += `<div class="preset-item" style="cursor:pointer;${G.selCell === i ? 'border-color:var(--accent);' : ''}" onclick="selectGridCell(${i})">` +
+      `<span class="preset-name">${i + 1} · ${name}${hasCap ? ' <span style="opacity:0.6;">❝</span>' : ''}</span>` +
+      (filled
+        ? `<button class="preset-use" onclick="event.stopPropagation();enterGridCellCrop(${i})">Crop</button><button class="preset-del" onclick="event.stopPropagation();clearGridCell(${i})">×</button>`
+        : `<button class="preset-use" onclick="event.stopPropagation();pickGridCellImage(${i})">Add</button>`) +
+      `</div>`;
+  }
+  list.innerHTML = html;
+}
+
+// ── Export (full resolution, existing save pipeline) ───────────────────────
+async function exportGridImage(format) {
+  const anyFilled = G.cells.some(c => c && c.bitmap);
+  if (!anyFilled) { toast('Add at least one image to the grid', 'error'); return; }
+  const exportW = gridExportWidth();
+  const { rects, H } = gridGeometry(exportW);
+  const capH = G.caption.enabled ? Math.round(G.caption.heightPct / 100 * exportW) : 0;
+  const c = document.createElement('canvas');
+  c.width = exportW; c.height = Math.round(H + capH);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = G.gutterColor;
+  ctx.fillRect(0, 0, c.width, c.height);
+  let empty = 0;
+  rects.forEach(r => {
+    const cell = G.cells[r.i];
+    if (cell && cell.bitmap) {
+      const { outW, outH, scale, offsetX, offsetY } = cell.crop;
+      ctx.drawImage(cell.bitmap,
+        offsetX / scale, offsetY / scale, outW / scale, outH / scale,
+        Math.round(r.x), Math.round(r.y), Math.round(r.w), Math.round(r.h));
+    } else {
+      empty++;
+    }
+    if (cell && cell.caption && cell.caption.text.trim()) drawCellCaption(ctx, cell.caption, r);
+  });
+  if (empty) toast(`${empty} empty cell${empty > 1 ? 's' : ''} exported as background`, 'error');
+  if (G.caption.enabled && G.caption.text.trim()) {
+    const sp = fontSpec(G.caption.family);
+    if (sp && !sp.sys) {
+      const ok = await ensureFontLoaded(G.caption.family, 400);
+      if (!ok) toast(`${G.caption.family} unavailable — exporting with fallback`, 'error');
+    }
+    const spec = { text: G.caption.text, family: G.caption.family, weight: 400, italic: false,
+                   sizePx: G.caption.sizePct / 100 * exportW, letterSpacingEm: 0, lineHeight: 1.35, maxWpx: exportW * 0.9 };
+    const m = measureWrap(spec);
+    ctx.fillStyle = contrastColor(G.gutterColor);
+    ctx.font = `400 ${spec.sizePx}px "${G.caption.family}", 'Helvetica Neue', Arial, sans-serif`;
+    ctx.textBaseline = 'alphabetic';
+    const startY = H + (capH - m.totalHPx) / 2;
+    const mxPad = exportW * 0.05;
+    m.lines.forEach((line, i) => {
+      if (!line) return;
+      let lx = mxPad;
+      if (G.caption.align === 'center') lx = (exportW - m.lineWidths[i]) / 2;
+      else if (G.caption.align === 'right') lx = exportW - mxPad - m.lineWidths[i];
+      const by = startY + i * m.lineHPx + (m.lineHPx - (m.ascent + m.descent)) / 2 + m.ascent;
+      ctx.fillText(line, lx, by);
+    });
+  }
+  await saveCanvas(c, format, `grid_${G.count}up`);
+}
+
+// Per-cell caption at export resolution, clipped to its cell; mirrors the DOM
+// preview's line-box placement (same half-leading + ascent formula as blocks)
+function drawCellCaption(ctx, cap, r) {
+  const sizePx = cap.sizePct / 100 * r.w;
+  const off = cap.offsetPct / 100 * r.w;
+  const spec = { text: cap.text, family: cap.family, weight: 400, italic: false,
+                 sizePx, letterSpacingEm: 0, lineHeight: 1.2, maxWpx: 1e9 };
+  const m = measureWrap(spec);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+  ctx.globalAlpha = (cap.opacity ?? 100) / 100;
+  ctx.fillStyle = cap.color;
+  ctx.font = `400 ${sizePx}px "${cap.family}", 'Helvetica Neue', Arial, sans-serif`;
+  ctx.textBaseline = 'alphabetic';
+  if (cap.shadow !== false) {
+    // legibility shadow — same proportional values as the DOM preview
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = sizePx * 0.12;
+    ctx.shadowOffsetY = sizePx * 0.06;
+  }
+  const total = m.lines.length * m.lineHPx;
+  const row = cap.pos[0], col = cap.pos[1];
+  let boxTop;
+  if (row === 't') boxTop = r.y + off;
+  else if (row === 'b') boxTop = r.y + r.h - off - total;
+  else boxTop = r.y + (r.h - total) / 2;
+  m.lines.forEach((line, i) => {
+    if (!line) return;
+    let lx;
+    if (col === 'l') lx = r.x + off;
+    else if (col === 'r') lx = r.x + r.w - off - m.lineWidths[i];
+    else lx = r.x + (r.w - m.lineWidths[i]) / 2;
+    ctx.fillText(line, lx, boxTop + i * m.lineHPx + (m.lineHPx - (m.ascent + m.descent)) / 2 + m.ascent);
+  });
+  ctx.restore();
+}
+
+// ── Persistence (framedata-grid; cell images are session-only) ─────────────
+function saveGridSettings() {
+  try {
+    localStorage.setItem('framedata-grid', JSON.stringify({
+      ratio: G.ratio, count: G.count, variant: G.variant,
+      gutterPct: G.gutterPct, gutterColor: G.gutterColor, caption: G.caption,
+    }));
+  } catch (e) { console.warn('grid save failed:', e); }
+}
+
+function loadGridStorage() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('framedata-grid') || '{}');
+    if (saved.ratio) G.ratio = saved.ratio;
+    if (saved.count && GRID_SPECS[saved.count]) G.count = saved.count;
+    if (saved.variant !== undefined && GRID_SPECS[G.count][saved.variant]) G.variant = saved.variant;
+    if (saved.gutterPct !== undefined) G.gutterPct = saved.gutterPct;
+    if (saved.gutterColor) G.gutterColor = saved.gutterColor;
+    if (saved.caption) G.caption = Object.assign(G.caption, saved.caption);
+  } catch (e) { console.warn('loadGridStorage error:', e); }
+}
+
+function initGridMode() {
+  loadGridStorage();
   const picker = document.getElementById('grid-count-picker');
   picker.innerHTML = Array.from({ length: 12 }, (_, k) =>
-    `<button class="crop-btn${k + 1 === G0.count ? ' active' : ''}" onclick="setGridCount(${k + 1})">${k + 1}</button>`
-  ).join('');
-  document.getElementById('grid-variant-section').style.display = GRID_SPECS[G0.count].length > 1 ? '' : 'none';
-  renderGridMock();
+    `<button class="crop-btn${k + 1 === G.count ? ' active' : ''}" onclick="setGridCount(${k + 1})">${k + 1}</button>`).join('');
+  document.getElementById('grid-variant-section').style.display = GRID_SPECS[G.count].length > 1 ? '' : 'none';
+  document.getElementById('grid-var-h').classList.toggle('active', G.variant === 0);
+  document.getElementById('grid-var-v').classList.toggle('active', G.variant === 1);
+  document.getElementById('grid-ratio-11').classList.toggle('active', G.ratio === '1:1');
+  document.getElementById('grid-ratio-45').classList.toggle('active', G.ratio === '4:5');
+  document.getElementById('grid-gutter').value = G.gutterPct;
+  document.getElementById('grid-gutter-val').textContent = G.gutterPct + '%';
+  document.getElementById('grid-gutter-color').value = G.gutterColor;
+  document.getElementById('grid-cap-on').checked = G.caption.enabled;
+  document.getElementById('grid-cap-text').value = G.caption.text;
+  document.getElementById('grid-cap-family').innerHTML = allFonts().map(o =>
+    `<option value="${escapeHtml(o.f)}"${o.f === G.caption.family ? ' selected' : ''}>${escapeHtml(o.f)}</option>`).join('');
+  document.getElementById('grid-cap-size').value = G.caption.sizePct;
+  document.getElementById('grid-cap-size-val').textContent = G.caption.sizePct + '%';
+  document.getElementById('grid-cap-height').value = G.caption.heightPct;
+  document.getElementById('grid-cap-height-val').textContent = G.caption.heightPct + '%';
+  ['left', 'center', 'right'].forEach(a =>
+    document.getElementById('grid-cap-align-' + a).classList.toggle('active', G.caption.align === a));
+  document.getElementById('grid-cell-file').addEventListener('change', e => {
+    const i = +e.target.dataset.cell;
+    if (e.target.files[0]) loadGridCellImage(i, e.target.files[0], true);
+    e.target.value = '';
+  });
+  // per-cell caption position picker: corners, edge-centers, center
+  const POS = [['tl','↖'],['tc','↑'],['tr','↗'],['ml','←'],['mc','·'],['mr','→'],['bl','↙'],['bc','↓'],['br','↘']];
+  document.getElementById('gcc-pos').innerHTML = POS.map(([p, glyph]) =>
+    `<button class="crop-btn" data-pos="${p}" title="${p}" onclick="setCellCapProp('pos','${p}')">${glyph}</button>`).join('');
+  const capSp = fontSpec(G.caption.family);
+  if (capSp && !capSp.sys) ensureFontLoaded(G.caption.family, 400).then(() => renderGridAll());
+  renderCellList();
+  updateCellCapPanel();
+  renderGridAll();
 }
 
 // ══════════════════════════════════════════
