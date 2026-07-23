@@ -694,7 +694,12 @@
           <button class="btn btn-ghost btn-sm btn-full" onclick="saveImageToLibrary()">☆ Save Selected Image</button>
         </div>
         <div class="section">
-          <div class="section-label">Font Collection</div>
+          <div class="section-label">Fonts</div>
+          <div style="display:flex;gap:6px;">
+            <select id="font-browser" style="flex:1;"></select>
+            <button class="btn btn-ghost btn-sm" onclick="useBrowserFont()">Use</button>
+          </div>
+          <div class="field-label" style="margin:10px 0 5px;">Add Google Font</div>
           <div style="display:flex;gap:6px;">
             <input type="text" id="lay-font-input" placeholder="Google font name or URL" onkeydown="if(event.key==='Enter')addCustomFont()">
             <button class="btn btn-ghost btn-sm" onclick="addCustomFont()">Add</button>
@@ -1141,6 +1146,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const savedTheme = localStorage.getItem('framedata-theme') || 'dark';
   applyTheme(savedTheme);
 
+  migrateStorage();
   loadFromStorage();
   setupDropZone();
   document.getElementById('lighting-notes').addEventListener('input', () => {
@@ -1196,6 +1202,36 @@ const CHECKBOX_KEYS = [
   { key:'showDatetime',  id:'show-datetime'  },
   { key:'shadowEnabled', id:'shadow-enabled' },
 ];
+
+// ══════════════════════════════════════════
+// STORAGE SCHEMA MIGRATIONS
+// ══════════════════════════════════════════
+// Two-tier upgrade model: NEW fields are healed by the defensive defaults in
+// each load*Storage() (additive changes need no migration); STRUCTURAL changes
+// get a stepwise migration here, run once at boot, tracked by
+// framedata-schema. Copies of the app opened against an older profile upgrade
+// on first load.
+const SCHEMA_VERSION = 2;
+function migrateStorage() {
+  try {
+    let v = parseInt(localStorage.getItem('framedata-schema') || '1', 10);
+    if (isNaN(v) || v < 1) v = 1;
+    if (v >= SCHEMA_VERSION) return;
+    if (v === 1) {
+      // v1 → v2: layout border `outside` single boolean → per-edge flags
+      try {
+        const lay = JSON.parse(localStorage.getItem('framedata-layout') || 'null');
+        if (lay && lay.border && typeof lay.border.outside !== 'object') {
+          const on = !!lay.border.outside;
+          lay.border.outside = { top: on, right: on, bottom: on, left: on };
+          localStorage.setItem('framedata-layout', JSON.stringify(lay));
+        }
+      } catch {}
+      v = 2;
+    }
+    localStorage.setItem('framedata-schema', String(v));
+  } catch (e) { console.warn('storage migration failed:', e); }
+}
 
 function saveSettings() {
   const settings = {
@@ -2085,15 +2121,29 @@ function primeLayoutFonts() {
     if (sp && !sp.sys) ensureFontLoaded(f, sp.w[0]).then(() => { if (L.cropApplied) { renderLayoutBlocks(); renderCustomFontList(); } });
   });
 }
-function populateFontSelect() {
-  let html = CURATED_FONTS.map(o => `<option value="${o.f}">${o.f}</option>`).join('');
+function buildFontOptionsHtml() {
+  let html = '<optgroup label="Built-in">' + CURATED_FONTS.map(o =>
+    `<option value="${o.f}" style="font-family:'${o.f.replace(/'/g, '')}',sans-serif;">${o.f}</option>`).join('') + '</optgroup>';
   if (L.customFonts.length) {
     html += '<optgroup label="Custom">' +
-      L.customFonts.map(o => `<option value="${escapeHtml(o.f)}">${escapeHtml(o.f)}</option>`).join('') +
+      L.customFonts.map(o => `<option value="${escapeHtml(o.f)}" style="font-family:'${o.f.replace(/'/g, '')}',sans-serif;">${escapeHtml(o.f)}</option>`).join('') +
       '</optgroup>';
   }
-  document.getElementById('lp-family').innerHTML = html;
+  return html;
 }
+function populateFontSelect() {
+  document.getElementById('lp-family').innerHTML = buildFontOptionsHtml();
+  const fb = document.getElementById('font-browser');
+  if (fb) fb.innerHTML = buildFontOptionsHtml();
+}
+
+// Always-visible font browser: applies to the selected text block
+window.useBrowserFont = () => {
+  const fam = document.getElementById('font-browser').value;
+  const b = selBlock();
+  if (!b || b.type !== 'text') { toast('Select a text block first', 'error'); return; }
+  setBlockProp('family', fam);
+};
 
 // ── Custom fonts: add any Google-hosted family by name or URL ──────────────
 // Accepts a family name ("Roboto Slab"), a specimen URL
