@@ -2432,31 +2432,57 @@ function applyMoveConstraints(b, x, y, snapAllowed) {
 function applyResizeSnap(d, g, snapAllowed) {
   const guides = { v: null, h: null };
   if (!L.snap || !snapAllowed) return { g, guides };
-  const { mX } = layoutMargins();
+  const { mX, mY } = layoutMargins();
   const thX = 6 / LV.W * 100;
+  const thY = 6 / LV.H * 100;
   const isCorner = d.h !== 'e' && d.h !== 'w';
   const movingRight = d.h === 'e' || d.h === 'ne' || d.h === 'se';
-  const snapEdge = pos => {
+
+  // Horizontal candidate: the moving vertical edge vs margins/center
+  const edgeX = movingRight ? g.x + g.w : g.x;
+  let hCand = null;
+  const snapX = pos => {
     if (Math.abs(pos - mX) < thX) return mX;
     if (Math.abs(pos - (100 - mX)) < thX) return 100 - mX;
     if (Math.abs(pos - 50) < thX) return 50;
     return null;
   };
-  if (movingRight) {
-    const target = snapEdge(g.x + g.w);
-    if (target !== null && target - g.x > 2) {
-      if (isCorner && d.b.type === 'text' && d.startW) g.size = d.startSize * ((target - g.x) / d.startW);
-      g.w = target - g.x;
-      guides.v = target;
+  const tx = snapX(edgeX);
+  if (tx !== null) {
+    const newW = movingRight ? tx - g.x : g.x + g.w - tx;
+    if (newW > 2) hCand = { dist: Math.abs(edgeX - tx) / thX, tx, newW };
+  }
+
+  // Vertical candidate — image blocks only: their bottom edge moves with the
+  // aspect-derived height, which is the edge that meets a margin on portrait
+  // or square images. Width follows the snapped height through the aspect.
+  let vCand = null;
+  if (isCorner && d.b.type === 'image' && d.b.aspect) {
+    const hFactor = L.crop.outW / (d.b.aspect * L.crop.outH);   // heightPct = w * hFactor
+    const bottom = d.b.y + g.w * hFactor;
+    const snapY = pos => {
+      if (Math.abs(pos - (100 - mY)) < thY) return 100 - mY;
+      if (Math.abs(pos - 50) < thY) return 50;
+      if (Math.abs(pos - mY) < thY) return mY;
+      return null;
+    };
+    const ty = snapY(bottom);
+    if (ty !== null) {
+      const newW = (ty - d.b.y) / hFactor;
+      if (newW > 2) vCand = { dist: Math.abs(bottom - ty) / thY, ty, newW };
     }
-  } else {
-    const target = snapEdge(g.x);
-    if (target !== null && g.x + g.w - target > 2) {
-      const right = g.x + g.w;
-      if (isCorner && d.b.type === 'text' && d.startW) g.size = d.startSize * ((right - target) / d.startW);
-      g.x = target; g.w = right - target;
-      guides.v = target;
-    }
+  }
+
+  // Apply the nearer candidate (distances normalized to their thresholds)
+  if (hCand && (!vCand || hCand.dist <= vCand.dist)) {
+    if (movingRight) g.w = hCand.newW;
+    else { g.x = g.x + g.w - hCand.newW; g.w = hCand.newW; }
+    if (isCorner && d.b.type === 'text' && d.startW) g.size = d.startSize * (g.w / d.startW);
+    guides.v = hCand.tx;
+  } else if (vCand) {
+    if (!movingRight) g.x = g.x + g.w - vCand.newW;   // keep the anchored right edge fixed
+    g.w = vCand.newW;
+    guides.h = vCand.ty;
   }
   return { g, guides };
 }
