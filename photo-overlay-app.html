@@ -1962,6 +1962,19 @@ window.useCustomFont = i => {
 function renderCustomFontList() {
   const list = document.getElementById('custom-font-list');
   if (!L.customFonts.length) { list.innerHTML = '<div class="preset-empty">No custom fonts yet</div>'; return; }
+  // Beyond 4 fonts the row list gets tall — collapse into a select + actions
+  if (L.customFonts.length > 4) {
+    list.innerHTML =
+      '<div style="display:flex;gap:6px;align-items:center;">' +
+      '<select id="custom-font-select" style="flex:1;">' +
+      L.customFonts.map((o, i) =>
+        `<option value="${i}" style="font-family:'${o.f.replace(/'/g, '')}',sans-serif;">${escapeHtml(o.f)}</option>`).join('') +
+      '</select>' +
+      '<button class="preset-use" onclick="useCustomFont(+document.getElementById(\'custom-font-select\').value)">Use</button>' +
+      '<button class="preset-del" title="Remove from collection" onclick="deleteCustomFont(+document.getElementById(\'custom-font-select\').value)">×</button>' +
+      '</div>';
+    return;
+  }
   list.innerHTML = L.customFonts.map((o, i) =>
     `<div class="preset-item"><span class="preset-name" style="font-family:'${o.f.replace(/'/g, '')}',sans-serif;font-size:14px;">${escapeHtml(o.f)}</span><button class="preset-use" onclick="useCustomFont(${i})">Use</button><button class="preset-del" onclick="deleteCustomFont(${i})">×</button></div>`
   ).join('');
