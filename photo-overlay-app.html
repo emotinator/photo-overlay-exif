@@ -334,6 +334,9 @@
     display: flex; flex-direction: column; justify-content: center;
     pointer-events: none;
   }
+  .grid-cell-cap { position: absolute; white-space: pre; pointer-events: none; z-index: 3; }
+  .pos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; width: 126px; }
+  .pos-grid .crop-btn { padding: 5px 0; font-size: 13px; line-height: 1; }
   .count-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
   .count-grid .crop-btn { padding: 8px 0; }
 
@@ -864,8 +867,39 @@
       <div class="tab-panel" id="tab-g-cells">
         <div class="section">
           <div class="section-label">Cells</div>
-          <div class="preset-list" id="grid-cell-list" style="max-height:300px;"></div>
+          <div class="preset-list" id="grid-cell-list" style="max-height:220px;"></div>
           <button class="btn btn-ghost btn-sm btn-full" style="margin-top:8px;" onclick="clearAllGridCells()">Clear All</button>
+        </div>
+        <div class="section" id="grid-cellcap-section" style="display:none;">
+          <div class="section-label">Cell <span id="gcc-cellnum"></span> Caption</div>
+          <div class="field-row">
+            <div class="field-label">Text</div>
+            <input type="text" id="gcc-text" placeholder="e.g. 85mm · f1.4" oninput="setCellCapProp('text',this.value)">
+          </div>
+          <div class="field-row" style="display:flex;gap:14px;align-items:flex-start;">
+            <div>
+              <div class="field-label">Position</div>
+              <div class="pos-grid" id="gcc-pos"></div>
+            </div>
+            <div style="flex:1;">
+              <div class="field-label">Color</div>
+              <input type="color" id="gcc-color" value="#ffffff" oninput="setCellCapProp('color',this.value)">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-label">Font</div>
+            <select id="gcc-family" onchange="setCellCapProp('family',this.value)"></select>
+          </div>
+          <div class="slider-row" style="margin-top:10px;">
+            <span class="slider-label">Size</span>
+            <input type="range" id="gcc-size" min="1.5" max="10" step="0.1" oninput="setCellCapProp('sizePct',+this.value)">
+            <span class="slider-val" id="gcc-size-val">3%</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Offset</span>
+            <input type="range" id="gcc-offset" min="0" max="15" step="0.5" oninput="setCellCapProp('offsetPct',+this.value)">
+            <span class="slider-val" id="gcc-offset-val">3%</span>
+          </div>
         </div>
         <input type="file" id="grid-cell-file" accept="image/*" style="display:none;">
       </div>
@@ -3305,9 +3339,17 @@ const GRID_SPECS = {
 const G = {
   ratio: '1:1', count: 4, variant: 0,
   gutterPct: 1.5, gutterColor: '#ffffff',
-  cells: [],   // sparse, index-aligned: { file, bitmap, crop, cropApplied } — not persisted
+  cells: [],       // sparse, index-aligned: { file, bitmap, crop, cropApplied, caption } — not persisted
+  selCell: null,   // Cells-tab selection for per-cell caption editing
   caption: { enabled: false, text: '', family: 'Helvetica Neue', sizePct: 2.2, align: 'center', heightPct: 10 },
 };
+
+// Per-cell caption: anchored to a corner / edge-center / center of its cell,
+// pushed inward by offset; sizes are % of the CELL width so captions scale
+// with the layout.
+function capDefaults() {
+  return { text: '', pos: 'bc', offsetPct: 3, family: 'Helvetica Neue', sizePct: 3, color: '#ffffff' };
+}
 S.grid = G;
 const GV = { W: 0, H: 0, capH: 0 };   // display metrics
 
@@ -3411,13 +3453,57 @@ function onGridGeometryChange() {
   saveGridSettings();
   renderGridAll();
   renderCellList();
+  updateCellCapPanel();   // selection may now be out of range
+}
+
+// ── Per-cell caption editing ───────────────────────────────────────────────
+window.selectGridCell = i => {
+  G.selCell = i;
+  renderCellList();
+  updateCellCapPanel();
+};
+
+window.setCellCapProp = (key, val) => {
+  const i = G.selCell;
+  if (i === null || i === undefined || i >= cellCount()) return;
+  if (!G.cells[i]) G.cells[i] = {};   // caption-only cells are allowed (text tiles)
+  const cell = G.cells[i];
+  cell.caption = cell.caption || capDefaults();
+  cell.caption[key] = val;
+  if (key === 'sizePct') document.getElementById('gcc-size-val').textContent = val + '%';
+  if (key === 'offsetPct') document.getElementById('gcc-offset-val').textContent = val + '%';
+  if (key === 'pos') updateCellCapPanel();
+  if (key === 'family') {
+    const sp = fontSpec(val);
+    if (sp && !sp.sys) ensureFontLoaded(val, 400).then(() => renderGridAll());
+  }
+  renderGridAll();
+};
+
+function updateCellCapPanel() {
+  const sec = document.getElementById('grid-cellcap-section');
+  const i = G.selCell;
+  if (i === null || i === undefined || i >= cellCount()) { sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  document.getElementById('gcc-cellnum').textContent = i + 1;
+  const cap = (G.cells[i] && G.cells[i].caption) || capDefaults();
+  document.getElementById('gcc-text').value = cap.text;
+  document.querySelectorAll('#gcc-pos .crop-btn').forEach(b => b.classList.toggle('active', b.dataset.pos === cap.pos));
+  document.getElementById('gcc-family').innerHTML = allFonts().map(o =>
+    `<option value="${escapeHtml(o.f)}"${o.f === cap.family ? ' selected' : ''}>${escapeHtml(o.f)}</option>`).join('');
+  document.getElementById('gcc-size').value = cap.sizePct;
+  document.getElementById('gcc-size-val').textContent = cap.sizePct + '%';
+  document.getElementById('gcc-offset').value = cap.offsetPct;
+  document.getElementById('gcc-offset-val').textContent = cap.offsetPct + '%';
+  document.getElementById('gcc-color').value = cap.color;
 }
 
 // ── Cell images & per-cell crop (shared crop stage) ────────────────────────
 async function loadGridCellImage(i, file, openCropStage) {
   try {
     const bitmap = await createImageBitmap(file);
-    const cell = { file, bitmap, crop: { scale: 1, offsetX: 0, offsetY: 0, outW: 0, outH: 0 }, cropApplied: false };
+    const prevCaption = G.cells[i] && G.cells[i].caption;   // keep caption on caption-only cells
+    const cell = { file, bitmap, crop: { scale: 1, offsetX: 0, offsetY: 0, outW: 0, outH: 0 }, cropApplied: false, caption: prevCaption };
     G.cells[i] = cell;
     resetCropState({ bitmap, aspect: cellAspect(i), crop: cell.crop });
     cell.cropApplied = true;   // centered default; refine via re-crop
@@ -3453,7 +3539,7 @@ function fillGridCells(files) {
     if (!G.cells[i] || !G.cells[i].bitmap) targets.push(i);
   }
   if (!targets.length) { toast('All cells are full', 'error'); return; }
-  targets.forEach(idx => { G.cells[idx] = { reserved: true }; });
+  targets.forEach(idx => { G.cells[idx] = { reserved: true, caption: G.cells[idx] && G.cells[idx].caption }; });
   targets.forEach((idx, j) => loadGridCellImage(idx, files[j], false));
   if (files.length > targets.length) toast(`${files.length - targets.length} file(s) skipped — grid is full`, 'error');
 }
@@ -3513,6 +3599,25 @@ function renderGridCellsDom() {
     } else {
       div.innerHTML = `<span class="grid-cell-num">${r.i + 1}</span><span class="grid-cell-plus">+</span>`;
     }
+    if (cell && cell.caption && cell.caption.text.trim()) {
+      const cap = cell.caption;
+      const sizePx = cap.sizePct / 100 * r.w;
+      const off = cap.offsetPct / 100 * r.w;
+      const cd = document.createElement('div');
+      cd.className = 'grid-cell-cap';
+      cd.textContent = cap.text;
+      let css = `font-family:"${cap.family}",'Helvetica Neue',Arial,sans-serif;` +
+                `font-size:${sizePx}px;line-height:${sizePx * 1.2}px;color:${cap.color};`;
+      const row = cap.pos[0], col = cap.pos[1];
+      if (row === 't') css += `top:${off}px;`;
+      else if (row === 'b') css += `bottom:${off}px;`;
+      else css += 'top:50%;transform:translateY(-50%);';
+      if (col === 'l') css += `left:${off}px;text-align:left;`;
+      else if (col === 'r') css += `right:${off}px;text-align:right;`;
+      else css += 'left:0;right:0;text-align:center;';
+      cd.style.cssText = css;
+      div.appendChild(cd);
+    }
     div.onclick = () => { filled ? enterGridCellCrop(r.i) : pickGridCellImage(r.i); };
     div.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); div.classList.add('dragover'); });
     div.addEventListener('dragleave', () => div.classList.remove('dragover'));
@@ -3556,12 +3661,14 @@ function renderCellList() {
   for (let i = 0; i < n; i++) {
     const cell = G.cells[i];
     const filled = cell && cell.bitmap;
-    const name = filled && cell.file ? escapeHtml(cell.file.name.length > 18 ? cell.file.name.slice(0, 18) + '…' : cell.file.name)
+    const hasCap = cell && cell.caption && cell.caption.text.trim();
+    const name = filled && cell.file ? escapeHtml(cell.file.name.length > 16 ? cell.file.name.slice(0, 16) + '…' : cell.file.name)
                                      : '<span style="opacity:0.55;">empty</span>';
-    html += `<div class="preset-item"><span class="preset-name">${i + 1} · ${name}</span>` +
+    html += `<div class="preset-item" style="cursor:pointer;${G.selCell === i ? 'border-color:var(--accent);' : ''}" onclick="selectGridCell(${i})">` +
+      `<span class="preset-name">${i + 1} · ${name}${hasCap ? ' <span style="opacity:0.6;">❝</span>' : ''}</span>` +
       (filled
-        ? `<button class="preset-use" onclick="enterGridCellCrop(${i})">Crop</button><button class="preset-del" onclick="clearGridCell(${i})">×</button>`
-        : `<button class="preset-use" onclick="pickGridCellImage(${i})">Add</button>`) +
+        ? `<button class="preset-use" onclick="event.stopPropagation();enterGridCellCrop(${i})">Crop</button><button class="preset-del" onclick="event.stopPropagation();clearGridCell(${i})">×</button>`
+        : `<button class="preset-use" onclick="event.stopPropagation();pickGridCellImage(${i})">Add</button>`) +
       `</div>`;
   }
   list.innerHTML = html;
@@ -3582,11 +3689,15 @@ async function exportGridImage(format) {
   let empty = 0;
   rects.forEach(r => {
     const cell = G.cells[r.i];
-    if (!cell || !cell.bitmap) { empty++; return; }
-    const { outW, outH, scale, offsetX, offsetY } = cell.crop;
-    ctx.drawImage(cell.bitmap,
-      offsetX / scale, offsetY / scale, outW / scale, outH / scale,
-      Math.round(r.x), Math.round(r.y), Math.round(r.w), Math.round(r.h));
+    if (cell && cell.bitmap) {
+      const { outW, outH, scale, offsetX, offsetY } = cell.crop;
+      ctx.drawImage(cell.bitmap,
+        offsetX / scale, offsetY / scale, outW / scale, outH / scale,
+        Math.round(r.x), Math.round(r.y), Math.round(r.w), Math.round(r.h));
+    } else {
+      empty++;
+    }
+    if (cell && cell.caption && cell.caption.text.trim()) drawCellCaption(ctx, cell.caption, r);
   });
   if (empty) toast(`${empty} empty cell${empty > 1 ? 's' : ''} exported as background`, 'error');
   if (G.caption.enabled && G.caption.text.trim()) {
@@ -3613,6 +3724,36 @@ async function exportGridImage(format) {
     });
   }
   await saveCanvas(c, format, `grid_${G.count}up`);
+}
+
+// Per-cell caption at export resolution, clipped to its cell; mirrors the DOM
+// preview's line-box placement (same half-leading + ascent formula as blocks)
+function drawCellCaption(ctx, cap, r) {
+  const sizePx = cap.sizePct / 100 * r.w;
+  const off = cap.offsetPct / 100 * r.w;
+  const spec = { text: cap.text, family: cap.family, weight: 400, italic: false,
+                 sizePx, letterSpacingEm: 0, lineHeight: 1.2, maxWpx: 1e9 };
+  const m = measureWrap(spec);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+  ctx.fillStyle = cap.color;
+  ctx.font = `400 ${sizePx}px "${cap.family}", 'Helvetica Neue', Arial, sans-serif`;
+  ctx.textBaseline = 'alphabetic';
+  const total = m.lines.length * m.lineHPx;
+  const row = cap.pos[0], col = cap.pos[1];
+  let boxTop;
+  if (row === 't') boxTop = r.y + off;
+  else if (row === 'b') boxTop = r.y + r.h - off - total;
+  else boxTop = r.y + (r.h - total) / 2;
+  m.lines.forEach((line, i) => {
+    if (!line) return;
+    let lx;
+    if (col === 'l') lx = r.x + off;
+    else if (col === 'r') lx = r.x + r.w - off - m.lineWidths[i];
+    else lx = r.x + (r.w - m.lineWidths[i]) / 2;
+    ctx.fillText(line, lx, boxTop + i * m.lineHPx + (m.lineHPx - (m.ascent + m.descent)) / 2 + m.ascent);
+  });
+  ctx.restore();
 }
 
 // ── Persistence (framedata-grid; cell images are session-only) ─────────────
@@ -3665,6 +3806,10 @@ function initGridMode() {
     if (e.target.files[0]) loadGridCellImage(i, e.target.files[0], true);
     e.target.value = '';
   });
+  // per-cell caption position picker: corners, edge-centers, center
+  const POS = [['tl','↖'],['tc','↑'],['tr','↗'],['ml','←'],['mc','·'],['mr','→'],['bl','↙'],['bc','↓'],['br','↘']];
+  document.getElementById('gcc-pos').innerHTML = POS.map(([p, glyph]) =>
+    `<button class="crop-btn" data-pos="${p}" title="${p}" onclick="setCellCapProp('pos','${p}')">${glyph}</button>`).join('');
   const capSp = fontSpec(G.caption.family);
   if (capSp && !capSp.sys) ensureFontLoaded(G.caption.family, 400).then(() => renderGridAll());
   renderCellList();
