@@ -1,133 +1,84 @@
-# Photo Overlay — EXIF
+# Photo Overlay (EXIF/Layout/Grid)
 
-A single-file browser-based tool for compositing camera EXIF metadata and lighting notes over portrait photographs — inspired by the overlay style popularized by photographers sharing behind-the-scenes shooting data on social media.
+A single-file, browser-based composition tool for photographers — three tools in one page, sharing a common shell, crop system, and export pipeline.
 
-No installation. No server. No build step. Just open the `.html` file in a browser.
-
----
-
-## Screenshot
-
-> Load an image → set your crop → adjust the overlay → export.
+No installation. No server. No build step. Just open `photo-overlay-app.html` in a browser and pick a mode from the header.
 
 ---
 
-## Features
-
-### Image
-- **Drag & drop** or file picker to load JPEG, PNG, TIFF, HEIC
-- **Interactive crop** — pan and zoom the image within a fixed aspect ratio frame before committing
-- Aspect ratio presets: **4:5**, **1:1**, **Original**
-- Rule-of-thirds grid overlay during crop
-- **Blur** and **Darken** sliders for the background image effect
+## The three modes
 
 ### EXIF
-- Automatically extracts and displays:
-  - Aperture, Shutter Speed, ISO, Focal Length
-  - Camera body, Lens, Date & Time
-- Uses [exifr](https://github.com/MikeKovarik/exifr) for broad format support including Sony ARW, Canon CR3, Nikon NEF, and standard JPEG/TIFF
+The original overlay tool: composites camera metadata and lighting notes over a photograph, in the style popularized by photographers sharing behind-the-scenes shooting data.
 
-### Overlay
-- **Lighting notes** text field with saved presets (click to re-use)
-- Full text position controls: margins (both sides), text width, vertical offset, horizontal offset
-- Typography controls: font size scale, line height
-- Optional **text drop shadow** with blur, opacity, X/Y offset
-- Material Symbols icons for each EXIF field
-- Configurable divider line opacity
+- Automatic EXIF extraction via [exifr](https://github.com/MikeKovarik/exifr): aperture, shutter, ISO, focal length, camera, lens, date/time (broad format support incl. Sony ARW, Canon CR3, Nikon NEF)
+- Lighting-notes field with saved presets
+- Full text position, typography, and drop-shadow controls; blur/darken background treatment
+- Photographer profile (© name, Instagram, website) with per-line visibility toggles
 
-### Profile
-- Photographer name (© copyright line), Instagram handle, website
-- Toggle visibility of each credit line independently
-- All settings **auto-saved to localStorage** and restored on next open
+### Layout
+A freeform block editor for magazine tearsheets, posters, and polaroid-style compositions.
 
-### Export
-- **JPEG** and **PNG** export at full source resolution
-- Native **Save As dialog** in Chrome/Edge (File System Access API)
-- Fallback to browser download in Firefox/Safari
-- Export profile + presets + all settings to **`.json`** or **`.md`**
+- **Text and image blocks** over your cropped photo — or over a **blank canvas** in any color
+- Drag, resize, duplicate, z-order; double-click to edit text inline
+- **Margins & snapping**: an adjustable margin box (negative allowed) clamps dragging; blocks snap to margins and center lines while moving *and* resizing (hold Alt to bypass)
+- **Typography**: 27 curated Google Fonts plus a custom font collection — add any Google-hosted family by name or URL; weights auto-detected. Size, weight, align, line height, letter spacing, color, drop shadow
+- **Image blocks**: CSS filters (invert / grayscale / brightness / contrast) and an alpha-preserving **color tint** for recoloring transparent logos; a persistent image collection for reusable marks
+- **Border / matte**: per-edge widths with per-edge inset (masks the image) or outside (expands the canvas) modes — or **bake the border into the image before cropping** so the finished composition keeps its aspect ratio (the polaroid-chin effect)
+- WYSIWYG guarantee: the on-screen preview and the exported canvas share one wrap/measure function — line breaks cannot diverge
+
+### Grid
+A multi-image grid composer (contact sheets, nine-ups, diptychs).
+
+- 1–12 cells with sensible arrangements (vertical/horizontal variants for 2–3)
+- Overall ratio 1:1 or 4:5; gutter width and gutter/background color
+- **Per-cell images with per-cell crop** — click a cell to select it, then re-crop, replace, or clear from the contextual action row; drop multiple files to fill empty cells in order
+- **Per-cell captions**: anchored to any corner, edge-center, or center, with edge offset, font, size, color, opacity, and optional drop shadow — plus a global caption band below the grid
+- Export size is driven by the weakest cell's native resolution (clamped 1600–4096 px wide) so no source is upscaled
+
+---
+
+## Shared machinery
+
+- **Crop stage** (all modes, incl. every grid cell): drag to pan, scroll/pinch or the zoom slider (100–500%) to zoom, `R` to reset; cursor-anchored zooming
+- **Export**: JPEG (q0.93) / PNG at full resolution; native Save As dialog in Chrome/Edge, download fallback elsewhere
+- Light/dark theme; settings export to `.json` / `.md`
+- Everything persists to `localStorage` and restores on next open — profile, sliders, presets, layout blocks, custom fonts, image collection, grid settings. Blank-canvas layouts restore completely; loaded photos and grid cell images are session-only
 
 ---
 
 ## Usage
 
-1. Download `photo-overlay-app.html`
-2. Open it in Chrome, Edge, Firefox, or Safari
-3. Load a photo via drag & drop or the file picker
-4. Set your crop — drag to pan, scroll to zoom, press **R** to reset
-5. Click **Apply Crop**
-6. Fill in your lighting notes, adjust overlay settings
-7. Export JPEG or PNG
-
-That's it.
-
----
+1. Open `photo-overlay-app.html` in Chrome, Edge, Firefox, or Safari
+2. Pick a mode: **EXIF | Layout | Grid** in the header
+3. Load images by click, drag & drop, or paste
+4. Crop, compose, export
 
 ## Requirements
 
-- A modern browser (Chrome 86+, Edge 86+, Firefox 90+, Safari 15.2+)
-- Internet connection on first load (Google Fonts + exifr CDN)
+- A modern browser (Chrome 105+, Edge 105+, Firefox 110+, Safari 16+); Chrome/Edge recommended for the native save dialog
+- Internet on first load (Google Fonts + exifr CDN); cached thereafter. Custom Google Fonts require a connection when first added
 
-> **Offline use:** Once the fonts and exifr library have been cached by your browser, the app will continue to work without a connection. For a fully self-contained offline build, the CDN dependencies can be inlined manually.
+| Feature | Chrome / Edge | Firefox / Safari |
+|---|---|---|
+| Core functionality (all modes) | ✅ | ✅ |
+| Native Save As dialog | ✅ | ⬇ Download |
+| Canvas letter-spacing parity | ✅ | approximate |
 
----
-
-## Browser Compatibility
-
-| Feature | Chrome | Edge | Firefox | Safari |
-|---|---|---|---|---|
-| Core functionality | ✅ | ✅ | ✅ | ✅ |
-| EXIF extraction | ✅ | ✅ | ✅ | ✅ |
-| Native Save As dialog | ✅ | ✅ | ⬇ Download | ⬇ Download |
-| Pinch-to-zoom crop | ✅ | ✅ | ✅ | ✅ |
-
----
-
-## Settings Persistence
-
-All overlay settings are automatically saved to `localStorage` and restored the next time you open the file in the same browser. This includes:
-
-- Photographer profile (name, Instagram, website)
-- All slider values (blur, darken, margins, font scale, shadow, etc.)
-- Crop ratio preference
-- Lighting note presets
-
-Settings can also be exported as a `.json` or `.md` file for backup or sharing via the header buttons.
-
----
-
-## Lighting Presets
-
-Type your lighting setup notes into the **Lighting Notes** field and click **+ Save as Preset**. Saved presets appear as buttons — click **Use** to instantly load them into the field for the current image.
-
----
-
-## Dependencies
-
-All loaded from CDN — no `npm install` required.
+## Dependencies (all CDN, no npm)
 
 | Library | Purpose |
 |---|---|
 | [exifr v7](https://github.com/MikeKovarik/exifr) | EXIF metadata extraction |
-| [Google Fonts — Syne, DM Mono, Instrument Serif](https://fonts.google.com) | UI typography |
-| [Google Material Symbols Outlined](https://fonts.google.com/icons) | Overlay icons |
+| [Google Fonts](https://fonts.google.com) | UI typography + the Layout/Grid font system |
 
----
+## Docs
 
-## Planned / Future
-
-- Custom font selection for overlay text
-- Additional custom text fields beyond lighting notes
-- Import settings from `.json` file
-- Multiple export size options (e.g. resize for Instagram vs. full resolution)
-- Offline / self-contained build
-
----
+Internal architecture and design notes live in [`/docs`](docs/) — start with `TECHNICAL.md`.
 
 ## License
 
 MIT — free to use, modify, and distribute.
-
----
 
 ## Credits
 
