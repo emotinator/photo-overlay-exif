@@ -725,6 +725,11 @@
               <input type="range" id="lp-lineheight" min="80" max="220" oninput="setBlockProp('lineHeight',this.value/100)">
               <span class="slider-val" id="lp-lineheight-val">125%</span>
             </div>
+            <div class="slider-row">
+              <span class="slider-label">Spacing</span>
+              <input type="range" id="lp-letterspacing" min="-5" max="50" step="0.5" oninput="setBlockProp('letterSpacing',this.value/100)">
+              <span class="slider-val" id="lp-letterspacing-val">0%</span>
+            </div>
             <div class="field-row" style="margin-top:12px;">
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);">
                 <input type="checkbox" id="lp-shadow-on" onchange="setBlockProp('shadowEnabled',this.checked)" style="accent-color:var(--accent);">Drop shadow
@@ -2705,6 +2710,9 @@ function updatePropsPanel() {
     document.getElementById('lp-size-val').textContent = b.sizePct.toFixed(1) + '%';
     document.getElementById('lp-lineheight').value = Math.round(b.lineHeight * 100);
     document.getElementById('lp-lineheight-val').textContent = Math.round(b.lineHeight * 100) + '%';
+    const ls = Math.round((b.letterSpacing || 0) * 200) / 2;   // em → % with 0.5 steps
+    document.getElementById('lp-letterspacing').value = ls;
+    document.getElementById('lp-letterspacing-val').textContent = ls + '%';
     const sh = b.shadow || { enabled: false, blur: 12, opacity: 70, x: 0, y: 2 };
     document.getElementById('lp-shadow-on').checked = !!sh.enabled;
     const sc = document.getElementById('lp-shadow-controls');
@@ -2761,6 +2769,8 @@ window.setBlockProp = (key, val) => {
     ensureFontLoaded(b.font.family, val).then(() => renderLayoutBlocks());
   } else if (key === 'lineHeight') {
     b.lineHeight = val;
+  } else if (key === 'letterSpacing') {
+    b.letterSpacing = val;
   } else {
     b[key] = val;
   }
