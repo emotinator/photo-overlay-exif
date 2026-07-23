@@ -574,6 +574,10 @@
             <div class="drop-icon">⬆</div>
             <div class="drop-text"><strong>Click, drag &amp; drop, or paste</strong><br>JPEG · PNG · TIFF · HEIC</div>
           </div>
+          <div style="display:flex;gap:8px;margin-top:10px;align-items:stretch;">
+            <button class="btn btn-ghost btn-sm" style="flex:1.5;" onclick="createBlankCanvas()">▦ Blank Canvas</button>
+            <input type="color" id="lay-canvas-color" value="#ffffff" oninput="setCanvasColor(this.value)" style="flex:1;height:auto;">
+          </div>
         </div>
         <div class="section">
           <div class="section-label">Border / Matte</div>
@@ -1866,6 +1870,7 @@ const L = {
   cropApplied: false,
   blur: 0, darken: 0,
   marginPct: 5, snap: 1,
+  isBlank: false, canvasColor: '#ffffff',
   border: { top: 0, right: 0, bottom: 0, left: 0, outside: { top: false, right: false, bottom: false, left: false }, color: '#ffffff', preCrop: false },
   blocks: [], selectedId: null, nextId: 1,
   loadedFonts: [], customFonts: [],
@@ -2114,6 +2119,50 @@ async function loadLayoutImage(file) {
   } catch (e) { toast('Could not load image', 'error'); console.error('loadLayoutImage:', e); }
 }
 
+// ── Blank canvas: a generated solid-color source at the selected ratio ─────
+function blankDims() {
+  const w = 2000;
+  if (L.cropRatio === '1:1') return { w, h: w };
+  return { w, h: Math.round(w * 5 / 4) };   // 4:5; 'original' has no meaning blank → 4:5
+}
+
+function makeBlankSource() {
+  const d = blankDims();
+  const c = document.createElement('canvas');
+  c.width = d.w; c.height = d.h;
+  const x = c.getContext('2d');
+  x.fillStyle = L.canvasColor || '#ffffff';
+  x.fillRect(0, 0, d.w, d.h);
+  L.srcBitmap = c;
+  L._padL = 0; L._padT = 0;
+  rebuildLayoutSource();
+  resetCropState({ bitmap: L.imageBitmap, aspect: L.cropRatio, crop: L.crop });
+  L.cropApplied = true;
+}
+
+window.createBlankCanvas = () => {
+  L.isBlank = true;
+  L.imageFile = null;
+  makeBlankSource();
+  document.getElementById('lay-recrop-btn').disabled = false;
+  saveLayoutSettings();
+  showStage('layout');
+  renderLayoutAll();
+  toast('Blank canvas created', 'success');
+};
+
+window.setCanvasColor = v => {
+  L.canvasColor = v;
+  saveLayoutSettings();
+  if (L.isBlank && L.srcBitmap) {
+    const x = L.srcBitmap.getContext('2d');
+    x.fillStyle = v;
+    x.fillRect(0, 0, L.srcBitmap.width, L.srcBitmap.height);
+    rebuildLayoutSource();
+    if (L.cropApplied) renderLayoutAll();
+  }
+};
+
 window.enterLayoutCropMode = () => {
   if (!L.imageBitmap) return;
   openCrop({
@@ -2131,6 +2180,16 @@ window.setLayoutCropRatio = (ratio, btn) => {
   document.querySelectorAll('#lay-ratio-row .crop-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   saveLayoutSettings();
+  if (L.isBlank) {   // regenerate the canvas at the new ratio instead of cropping it
+    makeBlankSource();
+    if (CROPX && CROPX.crop === L.crop && currentStage === 'crop') {
+      CROPX.aspect = ratio; CROPX.bitmap = L.imageBitmap;
+      sizeCropCanvas(); resetCropTransform(); drawCropViewport();
+    } else {
+      renderLayoutAll();
+    }
+    return;
+  }
   if (!L.imageBitmap) return;
   if (CROPX && CROPX.crop === L.crop && currentStage === 'crop') {
     CROPX.aspect = ratio;
@@ -2985,6 +3044,7 @@ function saveLayoutSettings() {
       localStorage.setItem('framedata-layout', JSON.stringify({
         cropRatio: L.cropRatio, blur: L.blur, darken: L.darken,
         marginPct: L.marginPct, snap: L.snap, border: L.border,
+        isBlank: L.isBlank, canvasColor: L.canvasColor,
         loadedFonts: L.loadedFonts, customFonts: L.customFonts,
         blocks, nextId: L.nextId,
       }));
@@ -3019,6 +3079,9 @@ function loadLayoutStorage() {
       document.getElementById('lay-border-' + k).value = L.border[k];
       document.getElementById('lay-border-' + k + '-val').textContent = L.border[k] + '%';
     });
+    if (saved.isBlank !== undefined) L.isBlank = !!saved.isBlank;
+    if (saved.canvasColor) L.canvasColor = saved.canvasColor;
+    document.getElementById('lay-canvas-color').value = L.canvasColor;
     document.getElementById('lay-border-precrop').checked = !!L.border.preCrop;
     updateBorderSideButtons();
     document.getElementById('lay-border-color').value = L.border.color;
@@ -3061,6 +3124,11 @@ function initLayoutMode() {
   populateFontSelect();      // re-populate after custom fonts restore
   renderCustomFontList();
   loadImgLib();
+  if (L.isBlank) {           // blank-canvas compositions restore fully on reload
+    makeBlankSource();
+    document.getElementById('lay-recrop-btn').disabled = false;
+    stageByMode.layout = 'layout';
+  }
 }
 
 // ══════════════════════════════════════════
