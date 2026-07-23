@@ -189,6 +189,13 @@
   .btn-accent:hover { background: var(--accent2); }
   .btn-sm { padding: 8px 13px; font-size: 10px; letter-spacing: 0.1em; }
   .btn-ico { font-size: 12px; line-height: 1; font-family: 'DM Mono', monospace; letter-spacing: 0; }
+  .border-side-toggle {
+    width: 34px; flex-shrink: 0; padding: 3px 0; border-radius: 3px;
+    font-family: 'Montserrat', sans-serif; font-size: 9px; font-weight: 900; letter-spacing: 0.06em;
+    border: 1px solid var(--border2); background: var(--surface2); color: var(--text3);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .border-side-toggle.out { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
   .btn-full { width: 100%; }
   .btn-row { display: flex; gap: 6px; }
 
@@ -598,26 +605,28 @@
             <span class="slider-label">Top</span>
             <input type="range" id="lay-border-top" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('top',+this.value)">
             <span class="slider-val" id="lay-border-top-val">0%</span>
+            <button class="border-side-toggle" id="lay-border-top-mode" onclick="toggleBorderSide('top')" title="IN masks the image edge · OUT expands the canvas">IN</button>
           </div>
           <div class="slider-row">
             <span class="slider-label">Right</span>
             <input type="range" id="lay-border-right" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('right',+this.value)">
             <span class="slider-val" id="lay-border-right-val">0%</span>
+            <button class="border-side-toggle" id="lay-border-right-mode" onclick="toggleBorderSide('right')" title="IN masks the image edge · OUT expands the canvas">IN</button>
           </div>
           <div class="slider-row">
             <span class="slider-label">Bottom</span>
             <input type="range" id="lay-border-bottom" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('bottom',+this.value)">
             <span class="slider-val" id="lay-border-bottom-val">0%</span>
+            <button class="border-side-toggle" id="lay-border-bottom-mode" onclick="toggleBorderSide('bottom')" title="IN masks the image edge · OUT expands the canvas">IN</button>
           </div>
           <div class="slider-row">
             <span class="slider-label">Left</span>
             <input type="range" id="lay-border-left" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('left',+this.value)">
             <span class="slider-val" id="lay-border-left-val">0%</span>
+            <button class="border-side-toggle" id="lay-border-left-mode" onclick="toggleBorderSide('left')" title="IN masks the image edge · OUT expands the canvas">IN</button>
           </div>
           <div class="field-row" style="display:flex;gap:10px;align-items:center;margin-top:8px;">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);flex:1;">
-              <input type="checkbox" id="lay-border-outside" onchange="setBorderProp('outside',this.checked)" style="accent-color:var(--accent);">Outside (expands canvas)
-            </label>
+            <div class="field-label" style="margin:0;flex:1;">Border Color</div>
             <input type="color" id="lay-border-color" value="#ffffff" oninput="setBorderProp('color',this.value)" style="flex:1;">
           </div>
         </div>
@@ -704,6 +713,33 @@
               <span class="slider-label">Line Ht</span>
               <input type="range" id="lp-lineheight" min="80" max="220" oninput="setBlockProp('lineHeight',this.value/100)">
               <span class="slider-val" id="lp-lineheight-val">125%</span>
+            </div>
+            <div class="field-row" style="margin-top:12px;">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);">
+                <input type="checkbox" id="lp-shadow-on" onchange="setBlockProp('shadowEnabled',this.checked)" style="accent-color:var(--accent);">Drop shadow
+              </label>
+            </div>
+            <div id="lp-shadow-controls" style="opacity:0.35;pointer-events:none;margin-top:6px;">
+              <div class="slider-row">
+                <span class="slider-label">Blur</span>
+                <input type="range" id="lp-shadow-blur" min="0" max="40" oninput="setBlockProp('shadowBlur',+this.value)">
+                <span class="slider-val" id="lp-shadow-blur-val">12px</span>
+              </div>
+              <div class="slider-row">
+                <span class="slider-label">Opacity</span>
+                <input type="range" id="lp-shadow-opacity" min="0" max="100" oninput="setBlockProp('shadowOpacity',+this.value)">
+                <span class="slider-val" id="lp-shadow-opacity-val">70%</span>
+              </div>
+              <div class="slider-row">
+                <span class="slider-label">Offset X</span>
+                <input type="range" id="lp-shadow-x" min="-20" max="20" oninput="setBlockProp('shadowX',+this.value)">
+                <span class="slider-val" id="lp-shadow-x-val">0px</span>
+              </div>
+              <div class="slider-row">
+                <span class="slider-label">Offset Y</span>
+                <input type="range" id="lp-shadow-y" min="-20" max="20" oninput="setBlockProp('shadowY',+this.value)">
+                <span class="slider-val" id="lp-shadow-y-val">2px</span>
+              </div>
             </div>
           </div>
           <div id="layout-props-image">
@@ -1821,7 +1857,7 @@ const L = {
   cropApplied: false,
   blur: 0, darken: 0,
   marginPct: 5, snap: 1,
-  border: { top: 0, right: 0, bottom: 0, left: 0, outside: false, color: '#ffffff' },
+  border: { top: 0, right: 0, bottom: 0, left: 0, outside: { top: false, right: false, bottom: false, left: false }, color: '#ffffff' },
   blocks: [], selectedId: null, nextId: 1,
   loadedFonts: [], customFonts: [],
 };
@@ -2115,10 +2151,15 @@ function drawCroppedBackground(ctx, bitmap, crop, blurPx, darken, destW, destH) 
 // the image edges in place.
 function layoutBorder() {
   const b = L.border || {};
+  const o = b.outside || {};
   const u = L.crop.outW / 100;
   const t = (b.top || 0) * u, r = (b.right || 0) * u;
   const btm = (b.bottom || 0) * u, l = (b.left || 0) * u;
-  return { t, r, btm, l, outside: !!b.outside, color: b.color || '#ffffff', any: t + r + btm + l > 0 };
+  return {
+    t, r, btm, l,
+    oT: !!o.top, oR: !!o.right, oB: !!o.bottom, oL: !!o.left,
+    color: b.color || '#ffffff', any: t + r + btm + l > 0,
+  };
 }
 
 // Cropped image + blur + darken rendered to an exact-size canvas. Needed
@@ -2138,8 +2179,8 @@ function sizeLayoutStage() {
   const ah = area.clientHeight - 130;
   const { outW, outH } = L.crop;
   const bp = layoutBorder();
-  const totalW = outW + (bp.outside ? bp.l + bp.r : 0);
-  const totalH = outH + (bp.outside ? bp.t + bp.btm : 0);
+  const totalW = outW + (bp.oL ? bp.l : 0) + (bp.oR ? bp.r : 0);
+  const totalH = outH + (bp.oT ? bp.t : 0) + (bp.oB ? bp.btm : 0);
   const ratio = totalW / totalH;
   let vW = aw, vH = aw / ratio;
   if (vH > ah) { vH = ah; vW = ah * ratio; }
@@ -2149,8 +2190,8 @@ function sizeLayoutStage() {
   const frame = document.getElementById('layout-frame');
   frame.style.width = LV.TW + 'px'; frame.style.height = LV.TH + 'px';
   // editor + guides track the IMAGE area — block % coords stay photo-relative
-  const ox = bp.outside ? bp.l * LV.k : 0;
-  const oy = bp.outside ? bp.t * LV.k : 0;
+  const ox = bp.oL ? bp.l * LV.k : 0;
+  const oy = bp.oT ? bp.t * LV.k : 0;
   ['layout-editor', 'layout-guides'].forEach(id => {
     const el = document.getElementById(id);
     el.style.inset = '';
@@ -2171,28 +2212,43 @@ function drawLayoutBg() {
   const k = LV.k * dpr;   // device px per output px
   const bg = drawImageBgCanvas(L.crop.outW * k, L.crop.outH * k, L.blur * k);
   if (!bp.any) { ctx.drawImage(bg, 0, 0); return; }
-  if (bp.outside) {
-    ctx.fillStyle = bp.color;
-    ctx.fillRect(0, 0, c.width, c.height);
-    ctx.drawImage(bg, Math.round(bp.l * k), Math.round(bp.t * k));
-  } else {
-    ctx.drawImage(bg, 0, 0);
-    ctx.fillStyle = bp.color;
-    if (bp.t)   ctx.fillRect(0, 0, c.width, Math.round(bp.t * k));
-    if (bp.btm) ctx.fillRect(0, c.height - Math.round(bp.btm * k), c.width, Math.round(bp.btm * k));
-    if (bp.l)   ctx.fillRect(0, 0, Math.round(bp.l * k), c.height);
-    if (bp.r)   ctx.fillRect(c.width - Math.round(bp.r * k), 0, Math.round(bp.r * k), c.height);
-  }
+  // Fill the whole canvas with the border color, place the image at its
+  // (possibly offset) position, then mask inset edges over the image.
+  const ox = Math.round((bp.oL ? bp.l : 0) * k);
+  const oy = Math.round((bp.oT ? bp.t : 0) * k);
+  ctx.fillStyle = bp.color;
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(bg, ox, oy);
+  const iw = bg.width, ih = bg.height;
+  if (!bp.oT && bp.t)   ctx.fillRect(ox, oy, iw, Math.round(bp.t * k));
+  if (!bp.oB && bp.btm) ctx.fillRect(ox, oy + ih - Math.round(bp.btm * k), iw, Math.round(bp.btm * k));
+  if (!bp.oL && bp.l)   ctx.fillRect(ox, oy, Math.round(bp.l * k), ih);
+  if (!bp.oR && bp.r)   ctx.fillRect(ox + iw - Math.round(bp.r * k), oy, Math.round(bp.r * k), ih);
 }
 
 window.setBorderProp = (key, val) => {
   L.border[key] = val;
-  if (key !== 'outside' && key !== 'color') {
-    document.getElementById('lay-border-' + key + '-val').textContent = val + '%';
-  }
+  if (key !== 'color') document.getElementById('lay-border-' + key + '-val').textContent = val + '%';
   saveLayoutSettings();
-  if (L.cropApplied) renderLayoutAll();   // outside-mode changes geometry
+  if (L.cropApplied) renderLayoutAll();
 };
+
+window.toggleBorderSide = side => {
+  L.border.outside = L.border.outside || {};
+  L.border.outside[side] = !L.border.outside[side];
+  updateBorderSideButtons();
+  saveLayoutSettings();
+  if (L.cropApplied) renderLayoutAll();   // geometry change
+};
+
+function updateBorderSideButtons() {
+  ['top', 'right', 'bottom', 'left'].forEach(s => {
+    const btn = document.getElementById('lay-border-' + s + '-mode');
+    const out = !!(L.border.outside && L.border.outside[s]);
+    btn.textContent = out ? 'OUT' : 'IN';
+    btn.classList.toggle('out', out);
+  });
+}
 
 function renderLayoutAll() {
   sizeLayoutStage();
@@ -2487,14 +2543,36 @@ function updatePropsPanel() {
     document.getElementById('lp-size-val').textContent = b.sizePct.toFixed(1) + '%';
     document.getElementById('lp-lineheight').value = Math.round(b.lineHeight * 100);
     document.getElementById('lp-lineheight-val').textContent = Math.round(b.lineHeight * 100) + '%';
+    const sh = b.shadow || { enabled: false, blur: 12, opacity: 70, x: 0, y: 2 };
+    document.getElementById('lp-shadow-on').checked = !!sh.enabled;
+    const sc = document.getElementById('lp-shadow-controls');
+    sc.style.opacity = sh.enabled ? '1' : '0.35';
+    sc.style.pointerEvents = sh.enabled ? 'all' : 'none';
+    document.getElementById('lp-shadow-blur').value = sh.blur;
+    document.getElementById('lp-shadow-blur-val').textContent = sh.blur + 'px';
+    document.getElementById('lp-shadow-opacity').value = sh.opacity;
+    document.getElementById('lp-shadow-opacity-val').textContent = sh.opacity + '%';
+    document.getElementById('lp-shadow-x').value = sh.x;
+    document.getElementById('lp-shadow-x-val').textContent = sh.x + 'px';
+    document.getElementById('lp-shadow-y').value = sh.y;
+    document.getElementById('lp-shadow-y-val').textContent = sh.y + 'px';
   }
 }
 
 const FILTER_KEYS = ['invert', 'grayscale', 'brightness', 'contrast'];
+const SHADOW_KEYS = { shadowEnabled: 'enabled', shadowBlur: 'blur', shadowOpacity: 'opacity', shadowX: 'x', shadowY: 'y' };
 
 window.setBlockProp = (key, val) => {
   const b = selBlock();
   if (!b) return;
+  if (key in SHADOW_KEYS) {
+    b.shadow = b.shadow || { enabled: false, blur: 12, opacity: 70, x: 0, y: 2 };
+    b.shadow[SHADOW_KEYS[key]] = key === 'shadowEnabled' ? !!val : val;
+    updatePropsPanel();
+    saveLayoutSettings();
+    renderLayoutBlocks();
+    return;
+  }
   if (FILTER_KEYS.includes(key) || key === 'tintEnabled' || key === 'tintColor') {
     if (key === 'tintEnabled' || key === 'tintColor') {
       b.tint = b.tint || { enabled: false, color: '#ffffff' };
@@ -2747,21 +2825,21 @@ async function exportLayoutImage(format) {
   }
   const { outW, outH } = L.crop;
   const bp = layoutBorder();
-  const totalW = Math.round(outW + (bp.outside ? bp.l + bp.r : 0));
-  const totalH = Math.round(outH + (bp.outside ? bp.t + bp.btm : 0));
-  const ox = bp.outside ? Math.round(bp.l) : 0;
-  const oy = bp.outside ? Math.round(bp.t) : 0;
+  const totalW = Math.round(outW + (bp.oL ? bp.l : 0) + (bp.oR ? bp.r : 0));
+  const totalH = Math.round(outH + (bp.oT ? bp.t : 0) + (bp.oB ? bp.btm : 0));
+  const ox = bp.oL ? Math.round(bp.l) : 0;
+  const oy = bp.oT ? Math.round(bp.t) : 0;
   const c = document.createElement('canvas');
   c.width = totalW; c.height = totalH;
   const ctx = c.getContext('2d');
-  if (bp.any && bp.outside) { ctx.fillStyle = bp.color; ctx.fillRect(0, 0, totalW, totalH); }
+  if (bp.any) { ctx.fillStyle = bp.color; ctx.fillRect(0, 0, totalW, totalH); }
   ctx.drawImage(drawImageBgCanvas(outW, outH, L.blur), ox, oy);
-  if (bp.any && !bp.outside) {
+  if (bp.any) {
     ctx.fillStyle = bp.color;
-    if (bp.t)   ctx.fillRect(0, 0, outW, Math.round(bp.t));
-    if (bp.btm) ctx.fillRect(0, outH - Math.round(bp.btm), outW, Math.round(bp.btm));
-    if (bp.l)   ctx.fillRect(0, 0, Math.round(bp.l), outH);
-    if (bp.r)   ctx.fillRect(outW - Math.round(bp.r), 0, Math.round(bp.r), outH);
+    if (!bp.oT && bp.t)   ctx.fillRect(ox, oy, outW, Math.round(bp.t));
+    if (!bp.oB && bp.btm) ctx.fillRect(ox, oy + outH - Math.round(bp.btm), outW, Math.round(bp.btm));
+    if (!bp.oL && bp.l)   ctx.fillRect(ox, oy, Math.round(bp.l), outH);
+    if (!bp.oR && bp.r)   ctx.fillRect(ox + outW - Math.round(bp.r), oy, Math.round(bp.r), outH);
   }
   ctx.save();
   ctx.translate(ox, oy);   // blocks stay photo-relative
@@ -2862,12 +2940,18 @@ function loadLayoutStorage() {
     if (saved.marginPct !== undefined) L.marginPct = saved.marginPct;
     if (saved.snap !== undefined) L.snap = saved.snap;
     if (Array.isArray(saved.customFonts)) L.customFonts = saved.customFonts;
-    if (saved.border) L.border = Object.assign({ top: 0, right: 0, bottom: 0, left: 0, outside: false, color: '#ffffff' }, saved.border);
+    if (saved.border) {
+      L.border = Object.assign({ top: 0, right: 0, bottom: 0, left: 0, color: '#ffffff' }, saved.border);
+      if (typeof L.border.outside !== 'object' || !L.border.outside) {
+        const v = !!saved.border.outside;   // migrate the old single-boolean form
+        L.border.outside = { top: v, right: v, bottom: v, left: v };
+      }
+    }
     ['top', 'right', 'bottom', 'left'].forEach(k => {
       document.getElementById('lay-border-' + k).value = L.border[k];
       document.getElementById('lay-border-' + k + '-val').textContent = L.border[k] + '%';
     });
-    document.getElementById('lay-border-outside').checked = !!L.border.outside;
+    updateBorderSideButtons();
     document.getElementById('lay-border-color').value = L.border.color;
     document.getElementById('lay-blur-slider').value = L.blur;
     document.getElementById('lay-blur-val').textContent = L.blur + 'px';
