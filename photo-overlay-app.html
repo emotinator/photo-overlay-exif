@@ -320,6 +320,7 @@
   }
   .grid-cell:not(.filled) { border: 1.5px dashed var(--border2); }
   .grid-cell:not(.filled):hover, .grid-cell.dragover { border-color: var(--accent); background: var(--accent-dim); }
+  .grid-cell.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
   .grid-cell-num { position: absolute; top: 6px; left: 8px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text3); }
   .grid-cell-plus { font-family: 'DM Mono', monospace; font-size: 22px; color: var(--text3); }
   .grid-cell:not(.filled):hover .grid-cell-plus { color: var(--accent); }
@@ -874,8 +875,8 @@
       </div>
       <div class="tab-panel" id="tab-g-caption">
         <div class="section" id="grid-cellcap-section">
-          <div class="section-label">Cell Captions</div>
-          <div class="count-grid" id="gcc-cellpick" style="margin-bottom:12px;"></div>
+          <div class="section-label">Cell <span id="gcc-cellnum">1</span> Caption</div>
+          <div class="drop-text" style="text-align:left;font-size:12px;margin-bottom:10px;">Click a cell on the stage to switch which cell you're editing.</div>
           <div class="field-row">
             <div class="field-label">Text</div>
             <input type="text" id="gcc-text" placeholder="e.g. 85mm · f1.4" oninput="setCellCapProp('text',this.value)">
@@ -1007,8 +1008,14 @@
     <!-- GRID STAGE -->
     <div id="grid-stage">
       <div class="grid-frame" id="grid-frame"></div>
-      <div class="crop-hint" style="margin-top:13px;">
-        Click a cell to add / re-crop &nbsp;·&nbsp; drop files to fill &nbsp;·&nbsp; <span id="grid-dim" style="color:var(--text2);"></span>
+      <div class="preview-actions">
+        <span class="preview-dim" id="grid-selcell-label"></span>
+        <button class="btn btn-ghost btn-sm" id="grid-recrop-btn" onclick="recropSelectedCell()">✂ Re-crop</button>
+        <button class="btn btn-ghost btn-sm" id="grid-replace-btn" onclick="pickGridCellImage(G.selCell)">+ Add Image</button>
+        <button class="btn btn-ghost btn-sm" id="grid-clearcell-btn" onclick="clearGridCell(G.selCell)" style="color:var(--red);">✕ Clear</button>
+      </div>
+      <div class="crop-hint" style="margin-top:8px;">
+        Click a cell to select &nbsp;·&nbsp; drop files to fill &nbsp;·&nbsp; <span id="grid-dim" style="color:var(--text2);"></span>
       </div>
     </div>
 
@@ -3462,7 +3469,24 @@ window.selectGridCell = i => {
   G.selCell = i;
   renderCellList();
   updateCellCapPanel();
+  renderGridAll();   // stage highlight + context actions
 };
+
+window.recropSelectedCell = () => {
+  if (G.selCell !== null && G.selCell !== undefined) enterGridCellCrop(G.selCell);
+};
+
+function updateGridCellActions() {
+  const i = G.selCell;
+  const has = i !== null && i !== undefined && i < cellCount();
+  const cell = has ? G.cells[i] : null;
+  const filled = !!(cell && cell.bitmap);
+  document.getElementById('grid-selcell-label').textContent = has ? `Cell ${i + 1}${filled ? '' : ' · empty'}` : '';
+  document.getElementById('grid-recrop-btn').disabled = !filled;
+  document.getElementById('grid-replace-btn').disabled = !has;
+  document.getElementById('grid-replace-btn').textContent = filled ? '⇄ Replace' : '+ Add Image';
+  document.getElementById('grid-clearcell-btn').disabled = !(filled || (cell && cell.caption && cell.caption.text.trim()));
+}
 
 window.setCellCapProp = (key, val) => {
   const i = G.selCell;
@@ -3485,8 +3509,7 @@ function updateCellCapPanel() {
   const n = cellCount();
   if (G.selCell === null || G.selCell === undefined || G.selCell >= n) G.selCell = 0;
   const i = G.selCell;
-  document.getElementById('gcc-cellpick').innerHTML = Array.from({ length: n }, (_, k) =>
-    `<button class="crop-btn${k === i ? ' active' : ''}" onclick="selectGridCell(${k})">${k + 1}</button>`).join('');
+  document.getElementById('gcc-cellnum').textContent = i + 1;
   const cap = (G.cells[i] && G.cells[i].caption) || capDefaults();
   document.getElementById('gcc-text').value = cap.text;
   document.querySelectorAll('#gcc-pos .crop-btn').forEach(b => b.classList.toggle('active', b.dataset.pos === cap.pos));
@@ -3549,6 +3572,7 @@ function fillGridCells(files) {
 function renderGridAll() {
   sizeGridStage();
   renderGridCellsDom();
+  updateGridCellActions();
   const ew = gridExportWidth();
   const capH = G.caption.enabled ? Math.round(G.caption.heightPct / 100 * ew) : 0;
   const eh = Math.round((G.ratio === '1:1' ? ew : ew * 5 / 4) + capH);
@@ -3580,7 +3604,7 @@ function renderGridCellsDom() {
     const cell = G.cells[r.i];
     const filled = cell && cell.bitmap;
     const div = document.createElement('div');
-    div.className = 'grid-cell' + (filled ? ' filled' : '');
+    div.className = 'grid-cell' + (filled ? ' filled' : '') + (G.selCell === r.i ? ' selected' : '');
     div.style.left = r.x + 'px'; div.style.top = r.y + 'px';
     div.style.width = r.w + 'px'; div.style.height = r.h + 'px';
     if (filled) {
@@ -3620,7 +3644,10 @@ function renderGridCellsDom() {
       cd.style.cssText = css;
       div.appendChild(cd);
     }
-    div.onclick = () => { filled ? enterGridCellCrop(r.i) : pickGridCellImage(r.i); };
+    div.onclick = () => {
+      selectGridCell(r.i);                      // click selects — actions are explicit buttons
+      if (!filled) pickGridCellImage(r.i);      // empty cells still open the picker directly
+    };
     div.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); div.classList.add('dragover'); });
     div.addEventListener('dragleave', () => div.classList.remove('dragover'));
     div.addEventListener('drop', e => {
@@ -3628,7 +3655,7 @@ function renderGridCellsDom() {
       div.classList.remove('dragover');
       document.getElementById('global-drop-overlay').classList.remove('visible');
       const f = e.dataTransfer.files[0];
-      if (f && f.type.startsWith('image/')) loadGridCellImage(r.i, f, true);
+      if (f && f.type.startsWith('image/')) { G.selCell = r.i; loadGridCellImage(r.i, f, true); }
     });
     frame.appendChild(div);
   });
