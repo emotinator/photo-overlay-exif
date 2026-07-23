@@ -237,31 +237,42 @@
   .preview-actions { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
   .preview-dim { font-size: 13px; color: var(--text3); font-family: 'DM Mono', monospace; margin-right: 6px; }
 
-  /* ── Layout Stage (M0 mock) ── */
+  /* ── Layout Stage ── */
   #layout-stage { display: none; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 20px; }
   #layout-stage.active { display: flex; }
   .layout-frame {
-    position: relative; container-type: inline-size;
-    aspect-ratio: 4 / 5; height: calc(100vh - 58px - 58px - 120px); max-width: calc(100% - 8px);
-    background:
-      radial-gradient(circle at 32% 26%, var(--surface3), transparent 62%),
-      linear-gradient(160deg, var(--surface2), var(--surface));
-    border: 1px solid var(--border2); border-radius: 3px; overflow: hidden;
+    position: relative; background: var(--surface2);
+    border-radius: 3px; overflow: hidden;
     box-shadow: 0 8px 48px rgba(0,0,0,0.35);
   }
+  #layout-bg { position: absolute; top: 0; left: 0; }
   #layout-editor { position: absolute; inset: 0; }
   .lblock {
     position: absolute; cursor: grab; user-select: none; -webkit-user-select: none;
-    touch-action: none; color: var(--text);
+    touch-action: none;
   }
   .lblock.dragging { cursor: grabbing; }
   .lblock.selected { outline: 1.5px solid var(--accent); }
-  .ldemo-title { font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase; line-height: 1.05; letter-spacing: 0.02em; }
-  .ldemo-credits { font-family: 'DM Mono', monospace; font-weight: 400; line-height: 1.55; white-space: pre-line; color: var(--text2); }
-  .ldemo-logo {
-    border: 1.5px dashed var(--border2); border-radius: 4px;
-    display: flex; align-items: center; justify-content: center;
-    font-family: 'Montserrat', sans-serif; font-weight: 300; letter-spacing: 0.25em; color: var(--text3);
+  .lblock-lines { pointer-events: none; }
+  .lblock-line { white-space: pre; }
+  .lblock img { pointer-events: none; display: block; width: 100%; height: 100%; object-fit: contain; }
+  .lblock-edit {
+    position: absolute; z-index: 50;
+    background: rgba(0,0,0,0.35);
+    border: 1px dashed var(--accent); border-radius: 2px;
+    outline: none; resize: none; overflow: hidden;
+    padding: 0; margin: 0; white-space: pre-wrap;
+  }
+  select {
+    width: 100%; background: var(--surface2); border: 1.5px solid var(--border);
+    border-radius: var(--radius); color: var(--text); font-family: 'DM Mono', monospace;
+    font-size: 13px; padding: 8px 10px; outline: none; cursor: pointer;
+  }
+  select:focus { border-color: var(--accent); }
+  input[type=color] {
+    width: 100%; height: 35px; background: var(--surface2);
+    border: 1.5px solid var(--border); border-radius: var(--radius);
+    cursor: pointer; padding: 3px;
   }
   .lblock-handle {
     position: absolute; width: 10px; height: 10px; background: var(--accent);
@@ -532,22 +543,112 @@
     </div>
     </div><!-- /pane-exif -->
 
-    <!-- LAYOUT PANE (M0 mock) -->
+    <!-- LAYOUT PANE -->
     <div class="mode-pane" id="pane-layout">
       <div class="sidebar-tabs">
-        <button class="tab-btn active" data-tab="l-blocks" onclick="switchTab('l-blocks',this)">Blocks</button>
+        <button class="tab-btn active" data-tab="l-image" onclick="switchTab('l-image',this)">Image</button>
+        <button class="tab-btn" data-tab="l-blocks" onclick="switchTab('l-blocks',this)">Blocks</button>
       </div>
-      <div class="tab-panel active" id="tab-l-blocks">
+
+      <div class="tab-panel active" id="tab-l-image">
         <div class="section">
-          <div class="section-label">Blocks</div>
-          <div class="preset-list" id="layout-block-list"></div>
-          <div class="field-row" style="margin-top:10px;">
-            <div class="field-label">Selected</div>
-            <div class="exif-item"><div class="exif-item-val" id="layout-selected-name">—</div></div>
+          <div class="section-label">Load Image</div>
+          <div class="drop-zone" id="lay-drop-zone">
+            <input type="file" id="lay-file-input" accept="image/*">
+            <div class="drop-icon">⬆</div>
+            <div class="drop-text"><strong>Click, drag &amp; drop, or paste</strong><br>JPEG · PNG · TIFF · HEIC</div>
           </div>
         </div>
         <div class="section">
-          <div class="drop-text" style="text-align:left;">M0 mock — drag blocks to move, corner handles to resize, <strong>Esc</strong> to deselect. Image loading, fonts, snapping and export arrive in M1–M2.</div>
+          <div class="section-label">Aspect Ratio</div>
+          <div class="crop-toggle" id="lay-ratio-row">
+            <button class="crop-btn active" data-ratio="4:5" onclick="setLayoutCropRatio('4:5',this)">4 : 5</button>
+            <button class="crop-btn" data-ratio="1:1" onclick="setLayoutCropRatio('1:1',this)">1 : 1</button>
+            <button class="crop-btn" data-ratio="original" onclick="setLayoutCropRatio('original',this)">Original</button>
+          </div>
+          <div style="margin-top:10px;">
+            <button class="btn btn-ghost btn-sm btn-full" id="lay-recrop-btn" onclick="enterLayoutCropMode()" disabled>✂ Adjust Crop</button>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-label">Background Effects</div>
+          <div class="slider-row">
+            <span class="slider-label">Blur</span>
+            <input type="range" id="lay-blur-slider" min="0" max="30" value="0" oninput="updateLayoutSlider('blur',this,'px','lay-blur-val')">
+            <span class="slider-val" id="lay-blur-val">0px</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Darken</span>
+            <input type="range" id="lay-darken-slider" min="0" max="85" value="0" oninput="updateLayoutSlider('darken',this,'%','lay-darken-val')">
+            <span class="slider-val" id="lay-darken-val">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-l-blocks">
+        <div class="section">
+          <div class="section-label">Add Block</div>
+          <div class="btn-row">
+            <button class="btn btn-ghost btn-sm btn-full" onclick="addTextBlockUI()">+ Text</button>
+            <button class="btn btn-ghost btn-sm btn-full" style="position:relative;overflow:hidden;">+ Logo
+              <input type="file" id="lay-logo-input" accept="image/png,image/svg+xml,image/jpeg" style="position:absolute;inset:0;opacity:0;cursor:pointer;">
+            </button>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-label">Blocks</div>
+          <div class="preset-list" id="layout-block-list"><div class="preset-empty">No blocks yet</div></div>
+        </div>
+        <div class="section" id="layout-props" style="display:none;">
+          <div class="section-label">Selected Block</div>
+          <div class="btn-row" style="margin-bottom:14px;">
+            <button class="btn btn-ghost btn-sm" onclick="blockOp('front')">Front</button>
+            <button class="btn btn-ghost btn-sm" onclick="blockOp('back')">Back</button>
+            <button class="btn btn-ghost btn-sm" onclick="blockOp('dup')">Dup</button>
+            <button class="btn btn-ghost btn-sm" onclick="blockOp('del')" style="color:var(--red);">Del</button>
+          </div>
+          <div id="layout-props-text">
+            <div class="field-row">
+              <div class="field-label">Font</div>
+              <select id="lp-family" onchange="setBlockProp('family',this.value)"></select>
+            </div>
+            <div class="field-row" style="display:flex;gap:8px;">
+              <div style="flex:1;">
+                <div class="field-label">Weight</div>
+                <select id="lp-weight" onchange="setBlockProp('weight',+this.value)"></select>
+              </div>
+              <div style="flex:1;">
+                <div class="field-label">Color</div>
+                <input type="color" id="lp-color" value="#ffffff" oninput="setBlockProp('color',this.value)">
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field-label">Align</div>
+              <div class="crop-toggle">
+                <button class="crop-btn" id="lp-align-left" onclick="setBlockProp('align','left')">Left</button>
+                <button class="crop-btn" id="lp-align-center" onclick="setBlockProp('align','center')">Center</button>
+                <button class="crop-btn" id="lp-align-right" onclick="setBlockProp('align','right')">Right</button>
+              </div>
+            </div>
+            <div class="slider-row" style="margin-top:14px;">
+              <span class="slider-label">Size</span>
+              <input type="range" id="lp-size" min="1" max="18" step="0.1" oninput="setBlockProp('sizePct',+this.value)">
+              <span class="slider-val" id="lp-size-val">4%</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Line Ht</span>
+              <input type="range" id="lp-lineheight" min="80" max="220" oninput="setBlockProp('lineHeight',this.value/100)">
+              <span class="slider-val" id="lp-lineheight-val">125%</span>
+            </div>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Opacity</span>
+            <input type="range" id="lp-opacity" min="5" max="100" oninput="setBlockProp('opacity',+this.value)">
+            <span class="slider-val" id="lp-opacity-val">100%</span>
+          </div>
+        </div>
+        <div class="section">
+          <div class="drop-text" style="text-align:left;">Double-click a text block to edit · <strong>Del</strong> removes · <strong>Esc</strong> deselects</div>
         </div>
       </div>
     </div><!-- /pane-layout -->
@@ -640,13 +741,18 @@
       </div>
     </div>
 
-    <!-- LAYOUT STAGE (M0 mock) -->
+    <!-- LAYOUT STAGE -->
     <div id="layout-stage">
-      <div class="layout-frame">
+      <div class="layout-frame" id="layout-frame">
+        <canvas id="layout-bg"></canvas>
         <div id="layout-editor"></div>
       </div>
-      <div class="crop-hint" style="margin-top:13px;">
-        Drag to move &nbsp;·&nbsp; corner handles to resize &nbsp;·&nbsp; <kbd>Esc</kbd> deselect
+      <div class="preview-actions">
+        <span class="preview-dim" id="layout-dim"></span>
+        <button class="btn btn-ghost btn-sm" onclick="enterLayoutCropMode()">✂ Re-crop</button>
+      </div>
+      <div class="crop-hint" style="margin-top:8px;">
+        Drag to move &nbsp;·&nbsp; handles resize &nbsp;·&nbsp; double-click text to edit &nbsp;·&nbsp; <kbd>Esc</kbd> deselect
       </div>
     </div>
 
@@ -785,12 +891,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (cropStageActive()) {
       sizeCropCanvas(); drawCropViewport();
     }
+    if (document.getElementById('layout-stage').classList.contains('active') && S.layout.cropApplied) {
+      renderLayoutAll();
+    }
   });
 
   initCropEvents();
-  renderLayoutBlocks();
-  initLayoutEditor();
+  initLayoutMode();
   initGridPicker();
+
+  const savedMode = localStorage.getItem('framedata-mode');
+  if (savedMode === 'layout' || savedMode === 'grid') switchMode(savedMode);
 });
 
 // Keys that map directly from saved settings → state → slider/input element id
@@ -906,7 +1017,7 @@ function loadFromStorage() {
 // ══════════════════════════════════════════
 let MODE = 'exif';
 let currentStage = 'empty';
-const stageByMode = { exif: 'empty', layout: 'layout', grid: 'grid' };
+const stageByMode = { exif: 'empty', layout: 'empty', grid: 'grid' };
 
 window.switchMode = mode => {
   if (mode === MODE) return;
@@ -915,6 +1026,11 @@ window.switchMode = mode => {
   document.body.dataset.mode = mode;
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
   showStage(stageByMode[mode]);
+  try { localStorage.setItem('framedata-mode', mode); } catch {}
+  if (mode === 'layout') {
+    primeLayoutFonts();
+    if (currentStage === 'layout' && S.layout.cropApplied) requestAnimationFrame(renderLayoutAll);
+  }
 };
 
 // ══════════════════════════════════════════
@@ -968,7 +1084,7 @@ function setupDropZone() {
     document.getElementById('global-drop-overlay').classList.remove('visible');
     zone.classList.remove('dragover');
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) loadImage(file);
+    if (file && file.type.startsWith('image/')) routeImageFile(file);
   });
 
   // ── Paste from clipboard ───────────────────────
@@ -979,11 +1095,18 @@ function setupDropZone() {
       if (item.type.startsWith('image/')) {
         e.preventDefault();
         const file = item.getAsFile();
-        if (file) loadImage(file);
+        if (file) routeImageFile(file);
         return;
       }
     }
   });
+}
+
+// Window-level drops & pastes go to the active mode's pipeline
+function routeImageFile(file) {
+  if (MODE === 'layout') loadLayoutImage(file);
+  else if (MODE === 'grid') toast('Dropping into Grid cells arrives in M3', 'error');
+  else loadImage(file);
 }
 
 async function loadImage(file) {
@@ -1513,7 +1636,7 @@ async function saveCanvas(canvas, format, filenameBase) {
 }
 
 window.exportImage = async (format) => {
-  if (MODE === 'layout') { toast('Layout export arrives later in M1', 'error'); return; }
+  if (MODE === 'layout') { exportLayoutImage(format); return; }
   if (MODE === 'grid')   { toast('Grid export arrives in M3', 'error'); return; }
   const canvas = document.getElementById('preview');
   if (!canvas.width) { toast('No image to export', 'error'); return; }
@@ -1587,28 +1710,331 @@ window.exportSettings = async (format) => {
 
 
 // ══════════════════════════════════════════
-// LAYOUT MODE — M0 mock (dummy blocks, drag/resize)
+// LAYOUT MODE — state
 // ══════════════════════════════════════════
-// Geometry in % of frame dims; font size in cqw (% of frame width via container query units)
-const L0 = {
-  blocks: [
-    { id:'b1', name:'Title',   type:'text',  x:8,  y:10, w:80, fs:9,   cls:'ldemo-title',   text:'EDITORIAL' },
-    { id:'b2', name:'Credits', type:'text',  x:8,  y:76, w:46, fs:2.6, cls:'ldemo-credits', text:'photo — elmer eraña\nmua — jane doe\nstyling — j. smith' },
-    { id:'b3', name:'Logo',    type:'image', x:64, y:5,  w:28, aspect:2.6 },
-  ],
-  selected: null,
+const L = {
+  imageFile: null, imageBitmap: null,
+  cropRatio: '4:5',
+  crop: { scale: 1, offsetX: 0, offsetY: 0, outW: 0, outH: 0 },
+  cropApplied: false,
+  blur: 0, darken: 0,
+  blocks: [], selectedId: null, nextId: 1,
+  loadedFonts: [],
 };
+S.layout = L;
+
+// Layout viewport display metrics (display px + display-per-output scale k)
+const LV = { W: 0, H: 0, k: 1 };
+
+// ══════════════════════════════════════════
+// FONTS (curated Google Fonts, dynamic load)
+// ══════════════════════════════════════════
+const CURATED_FONTS = [
+  { f: 'Helvetica Neue', w: [400, 700], sys: true },
+  { f: 'Anton', w: [400] },
+  { f: 'Archivo Black', w: [400] },
+  { f: 'Bebas Neue', w: [400] },
+  { f: 'Six Caps', w: [400] },
+  { f: 'Abril Fatface', w: [400] },
+  { f: 'Oswald', w: [400, 500, 700] },
+  { f: 'Fjalla One', w: [400] },
+  { f: 'Archivo Narrow', w: [400, 700] },
+  { f: 'Montserrat', w: [300, 400, 700, 900] },
+  { f: 'Syne', w: [400, 700, 800] },
+  { f: 'Space Grotesk', w: [400, 500, 700] },
+  { f: 'Work Sans', w: [300, 400, 600, 800] },
+  { f: 'Inter', w: [400, 600, 800] },
+  { f: 'Unbounded', w: [400, 700, 900] },
+  { f: 'Playfair Display', w: [400, 700, 900] },
+  { f: 'DM Serif Display', w: [400] },
+  { f: 'Instrument Serif', w: [400] },
+  { f: 'Libre Baskerville', w: [400, 700] },
+  { f: 'EB Garamond', w: [400, 600, 800] },
+  { f: 'Cormorant Garamond', w: [400, 600, 700] },
+  { f: 'Lora', w: [400, 600, 700] },
+  { f: 'Crimson Text', w: [400, 600, 700] },
+  { f: 'Italiana', w: [400] },
+  { f: 'Cinzel', w: [400, 700, 900] },
+  { f: 'Marcellus', w: [400] },
+  { f: 'DM Mono', w: [300, 400, 500] },
+];
+function fontSpec(family) { return CURATED_FONTS.find(x => x.f === family); }
+
+const FONT_CSS_PROMISES = {};
+function loadFontCss(family) {
+  const spec = fontSpec(family);
+  if (!spec || spec.sys) return Promise.resolve(true);
+  if (FONT_CSS_PROMISES[family]) return FONT_CSS_PROMISES[family];
+  FONT_CSS_PROMISES[family] = new Promise(res => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = `https://fonts.googleapis.com/css2?family=${family.replace(/ /g, '+')}:wght@${spec.w.join(';')}&display=swap`;
+    link.onload = () => res(true);
+    link.onerror = () => res(false);
+    document.head.appendChild(link);
+  });
+  if (!L.loadedFonts.includes(family)) { L.loadedFonts.push(family); saveLayoutSettings(); }
+  return FONT_CSS_PROMISES[family];
+}
+async function ensureFontLoaded(family, weight) {
+  const spec = fontSpec(family);
+  if (!spec || spec.sys) return true;
+  const cssOk = await loadFontCss(family);
+  if (!cssOk) return false;
+  try {
+    const faces = await document.fonts.load(`${weight || 400} 16px "${family}"`);
+    return faces.length > 0;
+  } catch { return false; }
+}
+let _fontsPrimed = false;
+function primeLayoutFonts() {
+  if (_fontsPrimed) return;
+  _fontsPrimed = true;
+  const fams = new Set(L.loadedFonts);
+  L.blocks.forEach(b => { if (b.type === 'text') fams.add(b.font.family); });
+  fams.forEach(f => {
+    const sp = fontSpec(f);
+    if (sp && !sp.sys) ensureFontLoaded(f, sp.w[0]).then(() => { if (L.cropApplied) renderLayoutBlocks(); });
+  });
+}
+function populateFontSelect() {
+  document.getElementById('lp-family').innerHTML =
+    CURATED_FONTS.map(o => `<option value="${o.f}">${o.f}</option>`).join('');
+}
+
+// ══════════════════════════════════════════
+// SHARED WRAP/MEASURE — single source of truth for DOM preview & export.
+// All wrap decisions happen in full-resolution output space; the DOM only
+// scales the result, so line breaks can never diverge between the two.
+// ══════════════════════════════════════════
+const MEASURE_CTX = document.createElement('canvas').getContext('2d');
+function measureWrap(spec) {
+  const ctx = MEASURE_CTX;
+  ctx.font = `${spec.italic ? 'italic ' : ''}${spec.weight} ${spec.sizePx}px "${spec.family}", 'Helvetica Neue', Arial, sans-serif`;
+  if ('letterSpacing' in ctx) ctx.letterSpacing = ((spec.letterSpacingEm || 0) * spec.sizePx) + 'px';
+  const lines = [];
+  String(spec.text || '').split('\n').forEach(par => {
+    if (!par.length) { lines.push(''); return; }
+    const words = par.split(' ');
+    let cur = '';
+    words.forEach(w => {
+      const t = cur ? cur + ' ' + w : w;
+      if (ctx.measureText(t).width > spec.maxWpx && cur) { lines.push(cur); cur = w; } else cur = t;
+    });
+    if (cur) lines.push(cur);
+  });
+  const probe = ctx.measureText('Mg');
+  const ascent  = probe.fontBoundingBoxAscent  || spec.sizePx * 0.8;
+  const descent = probe.fontBoundingBoxDescent || spec.sizePx * 0.2;
+  const lineWidths = lines.map(l => l ? ctx.measureText(l).width : 0);
+  const lineHPx = spec.sizePx * spec.lineHeight;
+  if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  return { lines, lineWidths, ascent, descent, lineHPx, totalHPx: lines.length * lineHPx };
+}
+function textSpec(b, outW) {
+  return {
+    text: b.text, family: b.font.family, weight: b.font.weight, italic: b.font.italic,
+    sizePx: b.sizePct / 100 * outW,
+    letterSpacingEm: b.letterSpacing || 0,
+    lineHeight: b.lineHeight,
+    maxWpx: b.w / 100 * outW,
+  };
+}
+
+// ══════════════════════════════════════════
+// LAYOUT — image pipeline (shared crop stage)
+// ══════════════════════════════════════════
+async function loadLayoutImage(file) {
+  try {
+    L.imageFile = file;
+    L.imageBitmap = await createImageBitmap(file);
+    L.cropApplied = false;
+    document.getElementById('lay-recrop-btn').disabled = false;
+    enterLayoutCropMode();
+    toast('Image loaded — set your crop', 'success');
+  } catch (e) { toast('Could not load image', 'error'); console.error('loadLayoutImage:', e); }
+}
+
+window.enterLayoutCropMode = () => {
+  if (!L.imageBitmap) return;
+  openCrop({
+    bitmap: L.imageBitmap,
+    aspect: L.cropRatio,
+    crop: L.crop,
+    applied: L.cropApplied,
+    onApply:  () => { L.cropApplied = true; showStage('layout'); renderLayoutAll(); },
+    onCancel: () => { if (L.cropApplied) { showStage('layout'); renderLayoutAll(); } else showStage('empty'); },
+  });
+};
+
+window.setLayoutCropRatio = (ratio, btn) => {
+  L.cropRatio = ratio;
+  document.querySelectorAll('#lay-ratio-row .crop-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  saveLayoutSettings();
+  if (!L.imageBitmap) return;
+  if (CROPX && CROPX.crop === L.crop && currentStage === 'crop') {
+    CROPX.aspect = ratio;
+    sizeCropCanvas(); resetCropTransform(); drawCropViewport();
+  } else {
+    resetCropState({ bitmap: L.imageBitmap, aspect: ratio, crop: L.crop });
+    if (L.cropApplied) renderLayoutAll();
+  }
+};
+
+window.updateLayoutSlider = (key, el, unit, valId) => {
+  L[key] = +el.value;
+  document.getElementById(valId).textContent = el.value + unit;
+  saveLayoutSettings();
+  if (L.cropApplied) drawLayoutBg();
+};
+
+// Shared background compositor (also the future grid-cell path)
+function drawCroppedBackground(ctx, bitmap, crop, blurPx, darken, destW, destH) {
+  const { outW, outH, scale, offsetX, offsetY } = crop;
+  const srcX = offsetX / scale, srcY = offsetY / scale;
+  const srcW = outW / scale,    srcH = outH / scale;
+  ctx.drawImage(bitmap, srcX, srcY, srcW, srcH, 0, 0, destW, destH);
+  if (blurPx > 0) { ctx.filter = `blur(${blurPx}px)`; ctx.drawImage(ctx.canvas, 0, 0, destW, destH); ctx.filter = 'none'; }
+  if (darken > 0) { ctx.fillStyle = `rgba(0,0,0,${darken / 100})`; ctx.fillRect(0, 0, destW, destH); }
+}
+
+function sizeLayoutStage() {
+  if (!L.cropApplied) return;
+  const area = document.getElementById('canvas-area');
+  const aw = area.clientWidth - 48;
+  const ah = area.clientHeight - 130;
+  const { outW, outH } = L.crop;
+  const ratio = outW / outH;
+  let vW = aw, vH = aw / ratio;
+  if (vH > ah) { vH = ah; vW = ah * ratio; }
+  LV.W = Math.floor(vW); LV.H = Math.floor(vH); LV.k = LV.W / outW;
+  const frame = document.getElementById('layout-frame');
+  frame.style.width = LV.W + 'px'; frame.style.height = LV.H + 'px';
+  document.getElementById('layout-dim').textContent = `${outW} × ${outH}px`;
+  drawLayoutBg();
+}
+
+function drawLayoutBg() {
+  const c = document.getElementById('layout-bg');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  c.width = LV.W * dpr; c.height = LV.H * dpr;
+  c.style.width = LV.W + 'px'; c.style.height = LV.H + 'px';
+  const ctx = c.getContext('2d');
+  ctx.scale(dpr, dpr);
+  // blur slider semantics: px at full output resolution, scaled to display
+  drawCroppedBackground(ctx, L.imageBitmap, L.crop, L.blur * LV.k, L.darken, LV.W, LV.H);
+}
+
+function renderLayoutAll() {
+  sizeLayoutStage();
+  renderLayoutBlocks();
+  updatePropsPanel();
+}
+
+// ══════════════════════════════════════════
+// LAYOUT — block engine
+// ══════════════════════════════════════════
+function newTextBlock() {
+  return {
+    id: 'b' + (L.nextId++), type: 'text',
+    x: 10, y: 42, w: 60,
+    text: 'Double-click to edit',
+    font: { family: 'Helvetica Neue', weight: 700, italic: false },
+    sizePct: 4, lineHeight: 1.25, letterSpacing: 0,
+    align: 'left', color: '#ffffff', opacity: 100,
+    shadow: { enabled: false, blur: 12, opacity: 70, x: 0, y: 2 },
+  };
+}
+
+window.addTextBlockUI = () => {
+  if (!L.cropApplied) { toast('Load & crop an image first', 'error'); return; }
+  const b = newTextBlock();
+  L.blocks.push(b);
+  L.selectedId = b.id;
+  saveLayoutSettings(); renderLayoutBlocks(); updatePropsPanel();
+};
+
+function addLogoBlock(file) {
+  if (!L.cropApplied) { toast('Load & crop an image first', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const src = reader.result;
+    const img = new Image();
+    img.onload = () => {
+      L.blocks.push({
+        id: 'b' + (L.nextId++), type: 'image',
+        x: 6, y: 6, w: 20,
+        aspect: (img.naturalWidth && img.naturalHeight) ? img.naturalWidth / img.naturalHeight : 1,
+        src, isSvg: (file.type || '').includes('svg'), opacity: 100,
+      });
+      L.selectedId = L.blocks[L.blocks.length - 1].id;
+      saveLayoutSettings(); renderLayoutBlocks(); updatePropsPanel();
+      toast('Logo added', 'success');
+    };
+    img.onerror = () => toast('Could not read logo image', 'error');
+    img.src = src;
+  };
+  reader.readAsDataURL(file);
+}
+
+function selBlock() { return L.blocks.find(b => b.id === L.selectedId) || null; }
+
+function blockName(b) {
+  if (b.type === 'image') return 'Logo';
+  const t = (b.text || '').split('\n')[0].trim();
+  return t ? (t.length > 22 ? t.slice(0, 22) + '…' : t) : 'Text';
+}
+function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function buildTextLines(wrap, b, m, sizePx) {
+  wrap.innerHTML = '';
+  const k = LV.k;
+  m.lines.forEach(line => {
+    const ld = document.createElement('div');
+    ld.className = 'lblock-line';
+    ld.textContent = line || ' ';
+    ld.style.fontFamily = `"${b.font.family}", 'Helvetica Neue', Arial, sans-serif`;
+    ld.style.fontWeight = b.font.weight;
+    ld.style.fontStyle = b.font.italic ? 'italic' : 'normal';
+    ld.style.fontSize = (sizePx * k) + 'px';
+    ld.style.lineHeight = (m.lineHPx * k) + 'px';
+    ld.style.letterSpacing = (b.letterSpacing || 0) + 'em';
+    ld.style.textAlign = b.align;
+    wrap.appendChild(ld);
+  });
+}
 
 function renderLayoutBlocks() {
   const ed = document.getElementById('layout-editor');
   ed.innerHTML = '';
-  L0.blocks.forEach(b => {
+  if (!L.cropApplied) { renderLayoutBlockList(); return; }
+  const outW = L.crop.outW;
+  L.blocks.forEach((b, zi) => {
     const el = document.createElement('div');
-    el.className = 'lblock' + (b.cls ? ' ' + b.cls : '') + (L0.selected === b.id ? ' selected' : '');
+    el.className = 'lblock' + (L.selectedId === b.id ? ' selected' : '');
     el.dataset.id = b.id; el.dataset.type = b.type;
     el.style.left = b.x + '%'; el.style.top = b.y + '%'; el.style.width = b.w + '%';
-    if (b.type === 'text') { el.style.fontSize = b.fs + 'cqw'; el.textContent = b.text; }
-    else { el.classList.add('ldemo-logo'); el.style.aspectRatio = b.aspect; el.style.fontSize = '2cqw'; el.textContent = 'LOGO'; }
+    el.style.zIndex = zi + 1;
+    el.style.opacity = (b.opacity ?? 100) / 100;
+    if (b.type === 'text') {
+      const spec = textSpec(b, outW);
+      const m = measureWrap(spec);
+      el.style.color = b.color;
+      if (b.shadow && b.shadow.enabled) {
+        const s = (outW / 1000) * LV.k;
+        el.style.textShadow = `${b.shadow.x * s}px ${b.shadow.y * s}px ${b.shadow.blur * s}px rgba(0,0,0,${b.shadow.opacity / 100})`;
+      }
+      const wrap = document.createElement('div');
+      wrap.className = 'lblock-lines';
+      el.appendChild(wrap);
+      buildTextLines(wrap, b, m, spec.sizePx);
+    } else {
+      el.style.aspectRatio = b.aspect;
+      const img = document.createElement('img');
+      img.src = b.src; img.draggable = false;
+      el.appendChild(img);
+    }
     const handles = b.type === 'text' ? ['nw','ne','sw','se','e','w'] : ['nw','ne','sw','se'];
     handles.forEach(h => {
       const hd = document.createElement('div');
@@ -1622,55 +2048,182 @@ function renderLayoutBlocks() {
 
 function renderLayoutBlockList() {
   const list = document.getElementById('layout-block-list');
-  list.innerHTML = L0.blocks.map(b =>
-    `<div class="preset-item" style="cursor:pointer;${L0.selected===b.id?'border-color:var(--accent);':''}" onclick="selectLayoutBlock('${b.id}')"><span class="preset-name">${b.name}</span></div>`
+  if (!L.blocks.length) { list.innerHTML = '<div class="preset-empty">No blocks yet</div>'; return; }
+  list.innerHTML = [...L.blocks].reverse().map(b =>
+    `<div class="preset-item" style="cursor:pointer;${L.selectedId === b.id ? 'border-color:var(--accent);' : ''}" onclick="selectLayoutBlock('${b.id}')"><span class="preset-name">${escapeHtml(blockName(b))}</span></div>`
   ).join('');
-  const sel = L0.blocks.find(b => b.id === L0.selected);
-  document.getElementById('layout-selected-name').textContent = sel ? sel.name : '—';
 }
-window.selectLayoutBlock = id => { L0.selected = id; renderLayoutBlocks(); };
+window.selectLayoutBlock = id => { L.selectedId = id; renderLayoutBlocks(); updatePropsPanel(); };
 
-// Pointer state machine: transform-only during drag, commit % geometry on pointerup
+function updatePropsPanel() {
+  const b = selBlock();
+  const panel = document.getElementById('layout-props');
+  panel.style.display = b ? '' : 'none';
+  if (!b) return;
+  document.getElementById('layout-props-text').style.display = b.type === 'text' ? '' : 'none';
+  document.getElementById('lp-opacity').value = b.opacity ?? 100;
+  document.getElementById('lp-opacity-val').textContent = (b.opacity ?? 100) + '%';
+  if (b.type === 'text') {
+    document.getElementById('lp-family').value = b.font.family;
+    const spec = fontSpec(b.font.family) || { w: [400, 700] };
+    document.getElementById('lp-weight').innerHTML =
+      spec.w.map(w => `<option value="${w}"${w === b.font.weight ? ' selected' : ''}>${w}</option>`).join('');
+    document.getElementById('lp-color').value = b.color;
+    ['left','center','right'].forEach(a =>
+      document.getElementById('lp-align-' + a).classList.toggle('active', b.align === a));
+    document.getElementById('lp-size').value = b.sizePct;
+    document.getElementById('lp-size-val').textContent = b.sizePct.toFixed(1) + '%';
+    document.getElementById('lp-lineheight').value = Math.round(b.lineHeight * 100);
+    document.getElementById('lp-lineheight-val').textContent = Math.round(b.lineHeight * 100) + '%';
+  }
+}
+
+window.setBlockProp = (key, val) => {
+  const b = selBlock();
+  if (!b) return;
+  if (key === 'family') {
+    b.font.family = val;
+    const spec = fontSpec(val) || { w: [400] };
+    if (!spec.w.includes(b.font.weight)) b.font.weight = spec.w.includes(700) ? 700 : spec.w[0];
+    ensureFontLoaded(b.font.family, b.font.weight).then(ok => {
+      if (!ok) toast(`Couldn't load ${val} — using fallback`, 'error');
+      renderLayoutBlocks();
+    });
+  } else if (key === 'weight') {
+    b.font.weight = val;
+    ensureFontLoaded(b.font.family, val).then(() => renderLayoutBlocks());
+  } else if (key === 'lineHeight') {
+    b.lineHeight = val;
+  } else {
+    b[key] = val;
+  }
+  updatePropsPanel();
+  saveLayoutSettings();
+  renderLayoutBlocks();
+};
+
+window.blockOp = op => {
+  const i = L.blocks.findIndex(b => b.id === L.selectedId);
+  if (i < 0) return;
+  const b = L.blocks[i];
+  if (op === 'del') { L.blocks.splice(i, 1); L.selectedId = null; }
+  else if (op === 'dup') {
+    const c = JSON.parse(JSON.stringify(b));
+    c.id = 'b' + (L.nextId++);
+    c.x = Math.min(90, c.x + 2); c.y = Math.min(94, c.y + 2);
+    L.blocks.push(c); L.selectedId = c.id;
+  }
+  else if (op === 'front') { L.blocks.splice(i, 1); L.blocks.push(b); }
+  else if (op === 'back')  { L.blocks.splice(i, 1); L.blocks.unshift(b); }
+  saveLayoutSettings(); renderLayoutBlocks(); updatePropsPanel();
+};
+
+// ── Inline text editing (overlay textarea; commit re-wraps via measureWrap) ──
+let EDITING = null;
+function startInlineEdit(b) {
+  const ed = document.getElementById('layout-editor');
+  const el = ed.querySelector(`.lblock[data-id="${b.id}"]`);
+  if (!el || EDITING) return;
+  L.selectedId = b.id;
+  el.style.visibility = 'hidden';
+  const spec = textSpec(b, L.crop.outW);
+  const m = measureWrap(spec);
+  const ta = document.createElement('textarea');
+  ta.className = 'lblock-edit';
+  ta.value = b.text;
+  ta.style.left = b.x + '%'; ta.style.top = b.y + '%'; ta.style.width = b.w + '%';
+  ta.style.height = (Math.max(m.totalHPx, m.lineHPx) * LV.k + 24) + 'px';
+  ta.style.fontFamily = `"${b.font.family}", 'Helvetica Neue', Arial, sans-serif`;
+  ta.style.fontWeight = b.font.weight;
+  ta.style.fontStyle = b.font.italic ? 'italic' : 'normal';
+  ta.style.fontSize = (spec.sizePx * LV.k) + 'px';
+  ta.style.lineHeight = (m.lineHPx * LV.k) + 'px';
+  ta.style.letterSpacing = (b.letterSpacing || 0) + 'em';
+  ta.style.textAlign = b.align;
+  ta.style.color = b.color;
+  ed.appendChild(ta);
+  EDITING = b.id;
+  ta.focus(); ta.select();
+  const commit = () => {
+    if (EDITING !== b.id) return;
+    EDITING = null;
+    b.text = ta.value;
+    ta.remove();
+    saveLayoutSettings();
+    renderLayoutBlocks();
+  };
+  ta.addEventListener('blur', commit);
+  ta.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Escape') ta.blur();
+  });
+}
+
+// ── Pointer state machine: transform-only during drag, commit % on release ──
 let LDRAG = null;
 
 function calcResize(d, dx) {
   const startWpx = d.startW / 100 * d.frameW;
-  let x = d.startX, w = d.startW, fs = d.startFs;
+  let x = d.startX, w = d.startW, size = d.startSize;
   if (d.h === 'e') {
-    w = Math.max(8, d.startW + dx / d.frameW * 100);
+    w = Math.max(4, d.startW + dx / d.frameW * 100);
   } else if (d.h === 'w') {
-    w = Math.max(8, d.startW - dx / d.frameW * 100);
+    w = Math.max(4, d.startW - dx / d.frameW * 100);
     x = d.startX + (d.startW - w);
-  } else { // corners: uniform scale (width + font together)
+  } else { // corners: uniform scale — width and font size together, breaks preserved
     const sign = (d.h === 'ne' || d.h === 'se') ? 1 : -1;
-    let f = Math.max(0.15, (startWpx + sign * dx) / startWpx);
+    let f = Math.max(0.1, (startWpx + sign * dx) / startWpx);
     w = d.startW * f;
-    if (w < 6) { w = 6; f = w / d.startW; }
+    if (w < 4) { w = 4; f = w / d.startW; }
     if (sign < 0) x = d.startX + (d.startW - w);
-    fs = d.startFs * f;
+    size = d.startSize * f;
   }
-  return { x, w, fs };
+  return { x, w, size };
+}
+
+function reflowTextEl(el, b, wPct) {
+  const spec = textSpec(b, L.crop.outW);
+  spec.maxWpx = wPct / 100 * L.crop.outW;
+  const m = measureWrap(spec);
+  buildTextLines(el.querySelector('.lblock-lines'), b, m, spec.sizePx);
 }
 
 function initLayoutEditor() {
   const ed = document.getElementById('layout-editor');
+  // Manual double-press detection: pointerup re-renders replace DOM nodes,
+  // which stops the browser from ever synthesizing a native dblclick.
+  let lastDown = { id: null, t: 0 };
 
   ed.addEventListener('pointerdown', e => {
+    if (EDITING || e.target.closest('.lblock-edit')) return;
     const handle = e.target.closest('.lblock-handle');
     const blockEl = e.target.closest('.lblock');
-    if (!blockEl) { L0.selected = null; renderLayoutBlocks(); return; }
-    const b = L0.blocks.find(x => x.id === blockEl.dataset.id);
-    if (L0.selected !== b.id) { L0.selected = b.id; renderLayoutBlocks(); }
+    if (!blockEl) {
+      if (L.selectedId) { L.selectedId = null; renderLayoutBlocks(); updatePropsPanel(); }
+      lastDown = { id: null, t: 0 };
+      return;
+    }
+    const b = L.blocks.find(x => x.id === blockEl.dataset.id);
+    if (!b) return;
+    const now = performance.now();
+    if (!handle && b.type === 'text' && lastDown.id === b.id && now - lastDown.t < 400) {
+      lastDown = { id: null, t: 0 };
+      e.preventDefault();   // stop the mousedown default from stealing focus off the textarea
+      startInlineEdit(b);
+      return;
+    }
+    lastDown = { id: b.id, t: now };
+    if (L.selectedId !== b.id) { L.selectedId = b.id; renderLayoutBlocks(); updatePropsPanel(); }
     const el = ed.querySelector(`.lblock[data-id="${b.id}"]`); // re-query: render may have replaced the node
     e.preventDefault();
     ed.setPointerCapture(e.pointerId);
     LDRAG = {
       mode: handle ? 'resize' : 'move',
       h: handle ? handle.dataset.h : null,
-      b, el,
+      b, el, moved: false,
       frameW: ed.clientWidth, frameH: ed.clientHeight,
       sx: e.clientX, sy: e.clientY,
-      startX: b.x, startY: b.y, startW: b.w, startFs: b.fs || 0,
+      startX: b.x, startY: b.y, startW: b.w, startSize: b.sizePct || 0,
     };
     if (!handle) el.classList.add('dragging');
   });
@@ -1678,36 +2231,195 @@ function initLayoutEditor() {
   ed.addEventListener('pointermove', e => {
     if (!LDRAG) return;
     const d = LDRAG, dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+    if (Math.abs(dx) + Math.abs(dy) > 2) d.moved = true;
     if (d.mode === 'move') {
       d.el.style.transform = `translate(${dx}px, ${dy}px)`;
     } else {
       const g = calcResize(d, dx);
       d.el.style.left = g.x + '%';
       d.el.style.width = g.w + '%';
-      if (d.b.type === 'text') d.el.style.fontSize = g.fs + 'cqw';
+      if (d.b.type === 'text') {
+        if (d.h === 'e' || d.h === 'w') {
+          reflowTextEl(d.el, d.b, g.w);           // live re-wrap at new width
+        } else {
+          const sizePx = g.size / 100 * L.crop.outW * LV.k;
+          d.el.querySelectorAll('.lblock-line').forEach(ld => {
+            ld.style.fontSize = sizePx + 'px';
+            ld.style.lineHeight = (sizePx * d.b.lineHeight) + 'px';
+          });
+        }
+      }
     }
   });
 
   const finish = e => {
     if (!LDRAG) return;
     const d = LDRAG; LDRAG = null;
+    if (!d.moved) { d.el.classList.remove('dragging'); return; }   // plain click: keep node alive for double-press
     const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
     if (d.mode === 'move') {
-      d.b.x = Math.max(-d.b.w + 4, Math.min(96, d.startX + dx / d.frameW * 100));
-      d.b.y = Math.max(-2, Math.min(96, d.startY + dy / d.frameH * 100));
+      d.b.x = Math.max(-d.b.w + 3, Math.min(97, d.startX + dx / d.frameW * 100));
+      d.b.y = Math.max(-3, Math.min(97, d.startY + dy / d.frameH * 100));
     } else {
       const g = calcResize(d, dx);
       d.b.x = g.x; d.b.w = g.w;
-      if (d.b.type === 'text') d.b.fs = g.fs;
+      if (d.b.type === 'text' && g.size) d.b.sizePct = g.size;
     }
+    saveLayoutSettings();
     renderLayoutBlocks();
+    updatePropsPanel();
   };
   ed.addEventListener('pointerup', finish);
   ed.addEventListener('pointercancel', () => { if (LDRAG) { LDRAG = null; renderLayoutBlocks(); } });
 
-  window.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && MODE === 'layout' && L0.selected) { L0.selected = null; renderLayoutBlocks(); }
+  ed.addEventListener('dblclick', e => {
+    const blockEl = e.target.closest('.lblock');
+    if (!blockEl) return;
+    const b = L.blocks.find(x => x.id === blockEl.dataset.id);
+    if (b && b.type === 'text') startInlineEdit(b);
   });
+}
+
+// ══════════════════════════════════════════
+// LAYOUT — export (full-res canvas, same wrap math as the DOM preview)
+// ══════════════════════════════════════════
+const BLOCK_IMG_CACHE = {};
+function getBlockImage(b) {
+  const cached = BLOCK_IMG_CACHE[b.id];
+  if (cached && cached.src === b.src) return Promise.resolve(cached);
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => { BLOCK_IMG_CACHE[b.id] = img; res(img); };
+    img.onerror = rej;
+    img.src = b.src;
+  });
+}
+
+async function exportLayoutImage(format) {
+  if (!L.cropApplied || !L.imageBitmap) { toast('Load & crop an image first', 'error'); return; }
+  // Gate on every used webfont being ready; fall back with a warning, never block
+  const used = [...new Set(L.blocks.filter(b => b.type === 'text').map(b => b.font.family + '|' + b.font.weight))];
+  for (const key of used) {
+    const [fam, w] = key.split('|');
+    const sp = fontSpec(fam);
+    if (sp && !sp.sys) {
+      const ok = await ensureFontLoaded(fam, +w);
+      if (!ok) toast(`${fam} unavailable — exporting with fallback`, 'error');
+    }
+  }
+  const { outW, outH } = L.crop;
+  const c = document.createElement('canvas');
+  c.width = outW; c.height = outH;
+  const ctx = c.getContext('2d');
+  drawCroppedBackground(ctx, L.imageBitmap, L.crop, L.blur, L.darken, outW, outH);
+  for (const b of L.blocks) {
+    ctx.save();
+    ctx.globalAlpha = (b.opacity ?? 100) / 100;
+    if (b.type === 'text') {
+      const spec = textSpec(b, outW);
+      const m = measureWrap(spec);
+      if (b.shadow && b.shadow.enabled) {
+        const s = outW / 1000;
+        ctx.shadowColor = `rgba(0,0,0,${b.shadow.opacity / 100})`;
+        ctx.shadowBlur = b.shadow.blur * s;
+        ctx.shadowOffsetX = b.shadow.x * s;
+        ctx.shadowOffsetY = b.shadow.y * s;
+      }
+      ctx.fillStyle = b.color;
+      ctx.font = `${b.font.italic ? 'italic ' : ''}${b.font.weight} ${spec.sizePx}px "${b.font.family}", 'Helvetica Neue', Arial, sans-serif`;
+      if ('letterSpacing' in ctx) ctx.letterSpacing = ((b.letterSpacing || 0) * spec.sizePx) + 'px';
+      ctx.textBaseline = 'alphabetic';
+      const xPx = b.x / 100 * outW, yPx = b.y / 100 * outH, wPx = b.w / 100 * outW;
+      m.lines.forEach((line, i) => {
+        if (!line) return;
+        let lx = xPx;
+        if (b.align === 'center') lx = xPx + (wPx - m.lineWidths[i]) / 2;
+        else if (b.align === 'right') lx = xPx + wPx - m.lineWidths[i];
+        // Mimic the CSS line-box model: half-leading + ascent
+        const by = yPx + i * m.lineHPx + (m.lineHPx - (m.ascent + m.descent)) / 2 + m.ascent;
+        ctx.fillText(line, lx, by);
+      });
+      if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+    } else {
+      try {
+        const img = await getBlockImage(b);
+        const wPx = b.w / 100 * outW;
+        ctx.drawImage(img, b.x / 100 * outW, b.y / 100 * outH, wPx, wPx / b.aspect);
+      } catch { toast('A logo failed to render', 'error'); }
+    }
+    ctx.restore();
+  }
+  const base = L.imageFile ? L.imageFile.name.replace(/\.[^.]+$/, '') : 'layout';
+  await saveCanvas(c, format, `${base}_layout`);
+}
+
+// ══════════════════════════════════════════
+// LAYOUT — persistence (framedata-layout, debounced)
+// ══════════════════════════════════════════
+let _layoutSaveT = null;
+function saveLayoutSettings() {
+  clearTimeout(_layoutSaveT);
+  _layoutSaveT = setTimeout(() => {
+    try {
+      let skipped = 0;
+      const blocks = L.blocks.filter(b => {
+        if (b.type === 'image' && b.src && b.src.length > 1500000) { skipped++; return false; }
+        return true;
+      });
+      localStorage.setItem('framedata-layout', JSON.stringify({
+        cropRatio: L.cropRatio, blur: L.blur, darken: L.darken,
+        loadedFonts: L.loadedFonts, blocks, nextId: L.nextId,
+      }));
+      if (skipped && !saveLayoutSettings._warned) {
+        saveLayoutSettings._warned = true;
+        toast(`${skipped} large logo${skipped > 1 ? 's' : ''} not persisted (size cap)`, 'error');
+      }
+    } catch (e) { console.warn('layout save failed:', e); }
+  }, 300);
+}
+
+function loadLayoutStorage() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('framedata-layout') || '{}');
+    if (saved.cropRatio) L.cropRatio = saved.cropRatio;
+    if (saved.blur !== undefined) L.blur = saved.blur;
+    if (saved.darken !== undefined) L.darken = saved.darken;
+    if (Array.isArray(saved.loadedFonts)) L.loadedFonts = saved.loadedFonts;
+    if (Array.isArray(saved.blocks)) L.blocks = saved.blocks;
+    if (saved.nextId) L.nextId = saved.nextId;
+    document.getElementById('lay-blur-slider').value = L.blur;
+    document.getElementById('lay-blur-val').textContent = L.blur + 'px';
+    document.getElementById('lay-darken-slider').value = L.darken;
+    document.getElementById('lay-darken-val').textContent = L.darken + '%';
+    document.querySelectorAll('#lay-ratio-row .crop-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.ratio === L.cropRatio));
+  } catch (e) { console.warn('loadLayoutStorage error:', e); }
+}
+
+function initLayoutMode() {
+  populateFontSelect();
+  const zone = document.getElementById('lay-drop-zone');
+  const fi = document.getElementById('lay-file-input');
+  fi.addEventListener('change', e => { if (e.target.files[0]) loadLayoutImage(e.target.files[0]); });
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('dragover');
+    if (e.dataTransfer.files[0]) loadLayoutImage(e.dataTransfer.files[0]);
+  });
+  document.getElementById('lay-logo-input').addEventListener('change', e => {
+    if (e.target.files[0]) addLogoBlock(e.target.files[0]);
+    e.target.value = '';
+  });
+  window.addEventListener('keydown', e => {
+    if (MODE !== 'layout' || EDITING) return;
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+    if ((e.key === 'Delete' || e.key === 'Backspace') && L.selectedId) { e.preventDefault(); blockOp('del'); }
+    else if (e.key === 'Escape' && L.selectedId) { L.selectedId = null; renderLayoutBlocks(); updatePropsPanel(); }
+  });
+  initLayoutEditor();
+  loadLayoutStorage();
 }
 
 // ══════════════════════════════════════════
