@@ -263,6 +263,13 @@
     outline: none; resize: none; overflow: hidden;
     padding: 0; margin: 0; white-space: pre-wrap;
   }
+  #margin-guide {
+    position: absolute; pointer-events: none; display: none; z-index: 80;
+    border: 1px dashed var(--accent); opacity: 0.4;
+  }
+  .snap-line { position: absolute; pointer-events: none; display: none; z-index: 81; background: var(--accent); }
+  #snap-v { width: 1px; top: 0; bottom: 0; }
+  #snap-h { height: 1px; left: 0; right: 0; }
   select {
     width: 100%; background: var(--surface2); border: 1.5px solid var(--border);
     border-radius: var(--radius); color: var(--text); font-family: 'DM Mono', monospace;
@@ -590,10 +597,36 @@
           <div class="section-label">Add Block</div>
           <div class="btn-row">
             <button class="btn btn-ghost btn-sm btn-full" onclick="addTextBlockUI()">+ Text</button>
-            <button class="btn btn-ghost btn-sm btn-full" style="position:relative;overflow:hidden;">+ Logo
-              <input type="file" id="lay-logo-input" accept="image/png,image/svg+xml,image/jpeg" style="position:absolute;inset:0;opacity:0;cursor:pointer;">
+            <button class="btn btn-ghost btn-sm btn-full" style="position:relative;overflow:hidden;">+ Image
+              <input type="file" id="lay-logo-input" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;">
             </button>
           </div>
+        </div>
+        <div class="section">
+          <div class="section-label">Margins &amp; Snapping</div>
+          <div class="slider-row">
+            <span class="slider-label">Margin</span>
+            <input type="range" id="lay-margin" min="-10" max="20" step="0.5" value="5" oninput="setLayoutMargin(+this.value)">
+            <span class="slider-val" id="lay-margin-val">5%</span>
+          </div>
+          <div class="field-row" style="margin-top:4px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);">
+              <input type="checkbox" id="lay-snap" checked onchange="L.snap=this.checked?1:0;saveLayoutSettings()" style="accent-color:var(--accent);">Snap to margins &amp; center
+            </label>
+          </div>
+          <div class="drop-text" style="text-align:left;font-size:12px;margin-top:6px;">Hold <strong>Alt</strong> while dragging to bypass snapping</div>
+        </div>
+        <div class="section">
+          <div class="section-label">Image Collection</div>
+          <div class="preset-list" id="imglib-list" style="margin-bottom:0;"><div class="preset-empty">No saved images yet</div></div>
+        </div>
+        <div class="section">
+          <div class="section-label">Font Collection</div>
+          <div style="display:flex;gap:6px;">
+            <input type="text" id="lay-font-input" placeholder="Google font name or URL" onkeydown="if(event.key==='Enter')addCustomFont()">
+            <button class="btn btn-ghost btn-sm" onclick="addCustomFont()">Add</button>
+          </div>
+          <div class="preset-list" id="custom-font-list" style="margin-top:8px;margin-bottom:0;"><div class="preset-empty">No custom fonts yet</div></div>
         </div>
         <div class="section">
           <div class="section-label">Blocks</div>
@@ -639,6 +672,32 @@
               <span class="slider-label">Line Ht</span>
               <input type="range" id="lp-lineheight" min="80" max="220" oninput="setBlockProp('lineHeight',this.value/100)">
               <span class="slider-val" id="lp-lineheight-val">125%</span>
+            </div>
+          </div>
+          <div id="layout-props-image">
+            <div class="field-label" style="margin-bottom:8px;">Image Filters</div>
+            <div class="slider-row">
+              <span class="slider-label">Invert</span>
+              <input type="range" id="lp-invert" min="0" max="100" oninput="setBlockProp('invert',+this.value)">
+              <span class="slider-val" id="lp-invert-val">0%</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Grayscale</span>
+              <input type="range" id="lp-grayscale" min="0" max="100" oninput="setBlockProp('grayscale',+this.value)">
+              <span class="slider-val" id="lp-grayscale-val">0%</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Brightness</span>
+              <input type="range" id="lp-brightness" min="0" max="200" oninput="setBlockProp('brightness',+this.value)">
+              <span class="slider-val" id="lp-brightness-val">100%</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Contrast</span>
+              <input type="range" id="lp-contrast" min="0" max="200" oninput="setBlockProp('contrast',+this.value)">
+              <span class="slider-val" id="lp-contrast-val">100%</span>
+            </div>
+            <div style="margin-top:10px;">
+              <button class="btn btn-ghost btn-sm btn-full" onclick="saveImageToLibrary()">☆ Save to Collection</button>
             </div>
           </div>
           <div class="slider-row">
@@ -746,6 +805,9 @@
       <div class="layout-frame" id="layout-frame">
         <canvas id="layout-bg"></canvas>
         <div id="layout-editor"></div>
+        <div id="margin-guide"></div>
+        <div id="snap-v" class="snap-line"></div>
+        <div id="snap-h" class="snap-line"></div>
       </div>
       <div class="preview-actions">
         <span class="preview-dim" id="layout-dim"></span>
@@ -1718,8 +1780,9 @@ const L = {
   crop: { scale: 1, offsetX: 0, offsetY: 0, outW: 0, outH: 0 },
   cropApplied: false,
   blur: 0, darken: 0,
+  marginPct: 5, snap: 1,
   blocks: [], selectedId: null, nextId: 1,
-  loadedFonts: [],
+  loadedFonts: [], customFonts: [],
 };
 S.layout = L;
 
@@ -1758,7 +1821,8 @@ const CURATED_FONTS = [
   { f: 'Marcellus', w: [400] },
   { f: 'DM Mono', w: [300, 400, 500] },
 ];
-function fontSpec(family) { return CURATED_FONTS.find(x => x.f === family); }
+function allFonts() { return CURATED_FONTS.concat(L.customFonts); }
+function fontSpec(family) { return allFonts().find(x => x.f === family); }
 
 const FONT_CSS_PROMISES = {};
 function loadFontCss(family) {
@@ -1792,14 +1856,107 @@ function primeLayoutFonts() {
   _fontsPrimed = true;
   const fams = new Set(L.loadedFonts);
   L.blocks.forEach(b => { if (b.type === 'text') fams.add(b.font.family); });
+  L.customFonts.forEach(o => fams.add(o.f));   // collection list previews need the css too
   fams.forEach(f => {
     const sp = fontSpec(f);
-    if (sp && !sp.sys) ensureFontLoaded(f, sp.w[0]).then(() => { if (L.cropApplied) renderLayoutBlocks(); });
+    if (sp && !sp.sys) ensureFontLoaded(f, sp.w[0]).then(() => { if (L.cropApplied) { renderLayoutBlocks(); renderCustomFontList(); } });
   });
 }
 function populateFontSelect() {
-  document.getElementById('lp-family').innerHTML =
-    CURATED_FONTS.map(o => `<option value="${o.f}">${o.f}</option>`).join('');
+  let html = CURATED_FONTS.map(o => `<option value="${o.f}">${o.f}</option>`).join('');
+  if (L.customFonts.length) {
+    html += '<optgroup label="Custom">' +
+      L.customFonts.map(o => `<option value="${escapeHtml(o.f)}">${escapeHtml(o.f)}</option>`).join('') +
+      '</optgroup>';
+  }
+  document.getElementById('lp-family').innerHTML = html;
+}
+
+// ── Custom fonts: add any Google-hosted family by name or URL ──────────────
+// Accepts a family name ("Roboto Slab"), a specimen URL
+// (fonts.google.com/specimen/Roboto+Slab) or a css2 API URL.
+function parseFontInput(input) {
+  input = (input || '').trim();
+  if (!input) return null;
+  try {
+    if (input.includes('fonts.google')) {
+      const u = new URL(input);
+      if (u.pathname.includes('/specimen/')) {
+        return decodeURIComponent(u.pathname.split('/specimen/')[1].split('/')[0]).replace(/\+/g, ' ');
+      }
+      const fam = u.searchParams.get('family');
+      if (fam) return fam.split(':')[0].replace(/\+/g, ' ');
+      return null;
+    }
+  } catch { return null; }
+  return input;
+}
+
+// Discovery fetch: probe css2 (variable range → common pair → plain 400),
+// inject the returned CSS, and read the actually-available weights out of it.
+// The discovered weight list is stored, so later sessions reload the font
+// through the ordinary loadFontCss <link> path with known-valid weights.
+async function fetchGoogleFont(family) {
+  const slug = family.replace(/ /g, '+');
+  const tries = [`${slug}:ital,wght@0,100..900`, `${slug}:wght@400;700`, slug];
+  for (const t of tries) {
+    try {
+      const res = await fetch(`https://fonts.googleapis.com/css2?family=${t}&display=swap`);
+      if (!res.ok) continue;
+      const css = await res.text();
+      const st = document.createElement('style');
+      st.dataset.customFont = family;
+      st.textContent = css;
+      document.head.appendChild(st);
+      let weights = [...new Set([...css.matchAll(/font-weight:\s*(\d+)(?:\s+(\d+))?/g)].flatMap(m =>
+        m[2] ? [100, 300, 400, 500, 700, 900].filter(w => w >= +m[1] && w <= +m[2]) : [+m[1]]
+      ))].sort((a, b) => a - b);
+      if (!weights.length) weights = [400];
+      await document.fonts.load(`${weights.includes(400) ? 400 : weights[0]} 16px "${family}"`).catch(() => {});
+      return { f: family, w: weights, custom: true };
+    } catch {}
+  }
+  return null;
+}
+
+window.addCustomFont = async () => {
+  const inp = document.getElementById('lay-font-input');
+  const family = parseFontInput(inp.value);
+  if (!family) { toast('Enter a font name or Google Fonts URL', 'error'); return; }
+  if (fontSpec(family)) { toast(`${family} is already available`, 'error'); return; }
+  toast(`Loading ${family}…`);
+  const spec = await fetchGoogleFont(family);
+  if (!spec) { toast(`Couldn't find "${family}" on Google Fonts`, 'error'); return; }
+  L.customFonts.push(spec);
+  FONT_CSS_PROMISES[family] = Promise.resolve(true);   // css already injected this session
+  saveLayoutSettings();
+  populateFontSelect();
+  renderCustomFontList();
+  updatePropsPanel();
+  inp.value = '';
+  toast(`${family} added (weights: ${spec.w.join(', ')})`, 'success');
+};
+
+window.deleteCustomFont = i => {
+  L.customFonts.splice(i, 1);
+  saveLayoutSettings();
+  populateFontSelect();
+  renderCustomFontList();
+};
+
+window.useCustomFont = i => {
+  const f = L.customFonts[i];
+  const b = selBlock();
+  if (!b || b.type !== 'text') { toast('Select a text block first', 'error'); return; }
+  setBlockProp('family', f.f);
+};
+
+function renderCustomFontList() {
+  const list = document.getElementById('custom-font-list');
+  if (!L.customFonts.length) { list.innerHTML = '<div class="preset-empty">No custom fonts yet</div>'; return; }
+  list.innerHTML = L.customFonts.map((o, i) =>
+    `<div class="preset-item"><span class="preset-name" style="font-family:'${o.f.replace(/'/g, '')}',sans-serif;font-size:14px;">${escapeHtml(o.f)}</span><button class="preset-use" onclick="useCustomFont(${i})">Use</button><button class="preset-del" onclick="deleteCustomFont(${i})">×</button></div>`
+  ).join('');
 }
 
 // ══════════════════════════════════════════
@@ -1933,6 +2090,71 @@ function renderLayoutAll() {
 }
 
 // ══════════════════════════════════════════
+// LAYOUT — margins & snapping
+// ══════════════════════════════════════════
+// Margin is % of image width; the vertical margin converts through the aspect
+// ratio so all four margins are equal in pixels. Negative widens the range.
+function layoutMargins() {
+  const mX = L.marginPct;
+  const mY = L.marginPct * L.crop.outW / L.crop.outH;
+  return { mX, mY };
+}
+
+function blockHeightPct(b) {
+  const { outW, outH } = L.crop;
+  if (b.type === 'image') return (b.w / 100 * outW / b.aspect) / outH * 100;
+  return measureWrap(textSpec(b, outW)).totalHPx / outH * 100;
+}
+
+// Hard-clamps a proposed move to the margin box, then snaps edges/centers to
+// margin lines and stage center lines. Returns snapped position + guide lines.
+function applyMoveConstraints(b, x, y, snapAllowed) {
+  const { mX, mY } = layoutMargins();
+  const bw = b.w, bh = blockHeightPct(b);
+  x = Math.max(mX, Math.min(100 - mX - bw, x));
+  y = Math.max(mY, Math.min(100 - mY - bh, y));
+  const guides = { v: null, h: null };
+  if (L.snap && snapAllowed) {
+    const thX = 6 / LV.W * 100;   // ~6 display px, in stage %
+    const thY = 6 / LV.H * 100;
+    if (Math.abs(x - mX) < thX)                       { x = mX;               guides.v = mX; }
+    else if (Math.abs(x + bw - (100 - mX)) < thX)     { x = 100 - mX - bw;    guides.v = 100 - mX; }
+    else if (Math.abs(x + bw / 2 - 50) < thX)         { x = 50 - bw / 2;      guides.v = 50; }
+    if (Math.abs(y - mY) < thY)                       { y = mY;               guides.h = mY; }
+    else if (Math.abs(y + bh - (100 - mY)) < thY)     { y = 100 - mY - bh;    guides.h = 100 - mY; }
+    else if (Math.abs(y + bh / 2 - 50) < thY)         { y = 50 - bh / 2;      guides.h = 50; }
+  }
+  return { x, y, guides };
+}
+
+function showSnapGuides(guides) {
+  const v = document.getElementById('snap-v');
+  const h = document.getElementById('snap-h');
+  if (guides && guides.v !== null) { v.style.left = guides.v + '%'; v.style.display = 'block'; }
+  else v.style.display = 'none';
+  if (guides && guides.h !== null) { h.style.top = guides.h + '%'; h.style.display = 'block'; }
+  else h.style.display = 'none';
+}
+
+function showMarginGuide(show) {
+  const g = document.getElementById('margin-guide');
+  if (!show || !L.cropApplied) { g.style.display = 'none'; return; }
+  const { mX, mY } = layoutMargins();
+  g.style.left = mX + '%'; g.style.right = mX + '%';
+  g.style.top = mY + '%'; g.style.bottom = mY + '%';
+  g.style.display = 'block';
+}
+
+window.setLayoutMargin = v => {
+  L.marginPct = v;
+  document.getElementById('lay-margin-val').textContent = v + '%';
+  saveLayoutSettings();
+  showMarginGuide(true);
+  clearTimeout(setLayoutMargin._t);
+  setLayoutMargin._t = setTimeout(() => showMarginGuide(false), 900);
+};
+
+// ══════════════════════════════════════════
 // LAYOUT — block engine
 // ══════════════════════════════════════════
 function newTextBlock() {
@@ -1964,13 +2186,14 @@ function addLogoBlock(file) {
     img.onload = () => {
       L.blocks.push({
         id: 'b' + (L.nextId++), type: 'image',
-        x: 6, y: 6, w: 20,
+        x: 6, y: 6, w: 20, name: file.name,
         aspect: (img.naturalWidth && img.naturalHeight) ? img.naturalWidth / img.naturalHeight : 1,
         src, isSvg: (file.type || '').includes('svg'), opacity: 100,
+        filters: { invert: 0, grayscale: 0, brightness: 100, contrast: 100 },
       });
       L.selectedId = L.blocks[L.blocks.length - 1].id;
       saveLayoutSettings(); renderLayoutBlocks(); updatePropsPanel();
-      toast('Logo added', 'success');
+      toast('Image added', 'success');
     };
     img.onerror = () => toast('Could not read logo image', 'error');
     img.src = src;
@@ -1981,9 +2204,62 @@ function addLogoBlock(file) {
 function selBlock() { return L.blocks.find(b => b.id === L.selectedId) || null; }
 
 function blockName(b) {
-  if (b.type === 'image') return 'Logo';
+  if (b.type === 'image') return (b.name || 'Image').length > 22 ? b.name.slice(0, 22) + '…' : (b.name || 'Image');
   const t = (b.text || '').split('\n')[0].trim();
   return t ? (t.length > 22 ? t.slice(0, 22) + '…' : t) : 'Text';
+}
+
+// ══════════════════════════════════════════
+// IMAGE COLLECTION (framedata-imagelib) — reusable logos/images, presets-style
+// ══════════════════════════════════════════
+let IMGLIB = [];
+function loadImgLib() {
+  try { IMGLIB = JSON.parse(localStorage.getItem('framedata-imagelib') || '[]'); } catch { IMGLIB = []; }
+  renderImgLib();
+}
+function saveImgLib() {
+  try { localStorage.setItem('framedata-imagelib', JSON.stringify(IMGLIB)); }
+  catch (e) { toast('Image collection is full — remove some items', 'error'); }
+}
+function renderImgLib() {
+  const list = document.getElementById('imglib-list');
+  if (!IMGLIB.length) { list.innerHTML = '<div class="preset-empty">No saved images yet</div>'; return; }
+  list.innerHTML = IMGLIB.map((o, i) =>
+    `<div class="preset-item"><img src="${o.src}" style="height:22px;max-width:44px;object-fit:contain;border-radius:2px;background:var(--surface3);flex-shrink:0;"><span class="preset-name">${escapeHtml(o.name || 'Image')}</span><button class="preset-use" onclick="useLibraryImage(${i})">Use</button><button class="preset-del" onclick="deleteLibraryImage(${i})">×</button></div>`
+  ).join('');
+}
+window.saveImageToLibrary = () => {
+  const b = selBlock();
+  if (!b || b.type !== 'image') { toast('Select an image block first', 'error'); return; }
+  if (b.src.length > 1500000) { toast('Image too large for the collection', 'error'); return; }
+  if (IMGLIB.some(o => o.src === b.src)) { toast('Already in the collection', 'error'); return; }
+  IMGLIB.push({ name: b.name || 'Image', src: b.src, aspect: b.aspect, isSvg: !!b.isSvg });
+  saveImgLib(); renderImgLib(); toast('Saved to collection', 'success');
+};
+window.useLibraryImage = i => {
+  if (!L.cropApplied) { toast('Load & crop an image first', 'error'); return; }
+  const o = IMGLIB[i];
+  L.blocks.push({
+    id: 'b' + (L.nextId++), type: 'image',
+    x: 6, y: 6, w: 20, name: o.name,
+    aspect: o.aspect, src: o.src, isSvg: o.isSvg, opacity: 100,
+    filters: { invert: 0, grayscale: 0, brightness: 100, contrast: 100 },
+  });
+  L.selectedId = L.blocks[L.blocks.length - 1].id;
+  saveLayoutSettings(); renderLayoutBlocks(); updatePropsPanel();
+};
+window.deleteLibraryImage = i => { IMGLIB.splice(i, 1); saveImgLib(); renderImgLib(); };
+
+// Same string drives CSS filter (DOM preview) and ctx.filter (export) —
+// Chromium supports identical syntax in both, so filters stay WYSIWYG.
+function imageFilterString(b) {
+  const f = b.filters || {};
+  const parts = [];
+  if (f.invert)                                    parts.push(`invert(${f.invert}%)`);
+  if (f.grayscale)                                 parts.push(`grayscale(${f.grayscale}%)`);
+  if (f.brightness !== undefined && f.brightness !== 100) parts.push(`brightness(${f.brightness}%)`);
+  if (f.contrast   !== undefined && f.contrast   !== 100) parts.push(`contrast(${f.contrast}%)`);
+  return parts.join(' ');
 }
 function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -2033,6 +2309,8 @@ function renderLayoutBlocks() {
       el.style.aspectRatio = b.aspect;
       const img = document.createElement('img');
       img.src = b.src; img.draggable = false;
+      const fs = imageFilterString(b);
+      if (fs) img.style.filter = fs;
       el.appendChild(img);
     }
     const handles = b.type === 'text' ? ['nw','ne','sw','se','e','w'] : ['nw','ne','sw','se'];
@@ -2061,8 +2339,16 @@ function updatePropsPanel() {
   panel.style.display = b ? '' : 'none';
   if (!b) return;
   document.getElementById('layout-props-text').style.display = b.type === 'text' ? '' : 'none';
+  document.getElementById('layout-props-image').style.display = b.type === 'image' ? '' : 'none';
   document.getElementById('lp-opacity').value = b.opacity ?? 100;
   document.getElementById('lp-opacity-val').textContent = (b.opacity ?? 100) + '%';
+  if (b.type === 'image') {
+    const f = b.filters || { invert: 0, grayscale: 0, brightness: 100, contrast: 100 };
+    FILTER_KEYS.forEach(k => {
+      document.getElementById('lp-' + k).value = f[k];
+      document.getElementById('lp-' + k + '-val').textContent = f[k] + '%';
+    });
+  }
   if (b.type === 'text') {
     document.getElementById('lp-family').value = b.font.family;
     const spec = fontSpec(b.font.family) || { w: [400, 700] };
@@ -2078,9 +2364,19 @@ function updatePropsPanel() {
   }
 }
 
+const FILTER_KEYS = ['invert', 'grayscale', 'brightness', 'contrast'];
+
 window.setBlockProp = (key, val) => {
   const b = selBlock();
   if (!b) return;
+  if (FILTER_KEYS.includes(key)) {
+    b.filters = b.filters || { invert: 0, grayscale: 0, brightness: 100, contrast: 100 };
+    b.filters[key] = val;
+    updatePropsPanel();
+    saveLayoutSettings();
+    renderLayoutBlocks();
+    return;
+  }
   if (key === 'family') {
     b.font.family = val;
     const spec = fontSpec(val) || { w: [400] };
@@ -2216,7 +2512,7 @@ function initLayoutEditor() {
     if (L.selectedId !== b.id) { L.selectedId = b.id; renderLayoutBlocks(); updatePropsPanel(); }
     const el = ed.querySelector(`.lblock[data-id="${b.id}"]`); // re-query: render may have replaced the node
     e.preventDefault();
-    ed.setPointerCapture(e.pointerId);
+    try { ed.setPointerCapture(e.pointerId); } catch {}
     LDRAG = {
       mode: handle ? 'resize' : 'move',
       h: handle ? handle.dataset.h : null,
@@ -2225,7 +2521,7 @@ function initLayoutEditor() {
       sx: e.clientX, sy: e.clientY,
       startX: b.x, startY: b.y, startW: b.w, startSize: b.sizePct || 0,
     };
-    if (!handle) el.classList.add('dragging');
+    if (!handle) { el.classList.add('dragging'); showMarginGuide(true); }
   });
 
   ed.addEventListener('pointermove', e => {
@@ -2233,7 +2529,13 @@ function initLayoutEditor() {
     const d = LDRAG, dx = e.clientX - d.sx, dy = e.clientY - d.sy;
     if (Math.abs(dx) + Math.abs(dy) > 2) d.moved = true;
     if (d.mode === 'move') {
-      d.el.style.transform = `translate(${dx}px, ${dy}px)`;
+      const snap = applyMoveConstraints(d.b,
+        d.startX + dx / d.frameW * 100,
+        d.startY + dy / d.frameH * 100, !e.altKey);
+      d.lastPos = snap;
+      d.el.style.transform =
+        `translate(${(snap.x - d.startX) / 100 * d.frameW}px, ${(snap.y - d.startY) / 100 * d.frameH}px)`;
+      showSnapGuides(snap.guides);
     } else {
       const g = calcResize(d, dx);
       d.el.style.left = g.x + '%';
@@ -2255,11 +2557,14 @@ function initLayoutEditor() {
   const finish = e => {
     if (!LDRAG) return;
     const d = LDRAG; LDRAG = null;
+    showSnapGuides(null); showMarginGuide(false);
     if (!d.moved) { d.el.classList.remove('dragging'); return; }   // plain click: keep node alive for double-press
     const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
     if (d.mode === 'move') {
-      d.b.x = Math.max(-d.b.w + 3, Math.min(97, d.startX + dx / d.frameW * 100));
-      d.b.y = Math.max(-3, Math.min(97, d.startY + dy / d.frameH * 100));
+      const snap = d.lastPos || applyMoveConstraints(d.b,
+        d.startX + dx / d.frameW * 100,
+        d.startY + dy / d.frameH * 100, !e.altKey);
+      d.b.x = snap.x; d.b.y = snap.y;
     } else {
       const g = calcResize(d, dx);
       d.b.x = g.x; d.b.w = g.w;
@@ -2270,7 +2575,9 @@ function initLayoutEditor() {
     updatePropsPanel();
   };
   ed.addEventListener('pointerup', finish);
-  ed.addEventListener('pointercancel', () => { if (LDRAG) { LDRAG = null; renderLayoutBlocks(); } });
+  ed.addEventListener('pointercancel', () => {
+    if (LDRAG) { LDRAG = null; showSnapGuides(null); showMarginGuide(false); renderLayoutBlocks(); }
+  });
 
   ed.addEventListener('dblclick', e => {
     const blockEl = e.target.closest('.lblock');
@@ -2344,8 +2651,11 @@ async function exportLayoutImage(format) {
       try {
         const img = await getBlockImage(b);
         const wPx = b.w / 100 * outW;
+        const fs = imageFilterString(b);
+        if (fs) ctx.filter = fs;
         ctx.drawImage(img, b.x / 100 * outW, b.y / 100 * outH, wPx, wPx / b.aspect);
-      } catch { toast('A logo failed to render', 'error'); }
+        ctx.filter = 'none';
+      } catch { toast('An image block failed to render', 'error'); }
     }
     ctx.restore();
   }
@@ -2368,7 +2678,9 @@ function saveLayoutSettings() {
       });
       localStorage.setItem('framedata-layout', JSON.stringify({
         cropRatio: L.cropRatio, blur: L.blur, darken: L.darken,
-        loadedFonts: L.loadedFonts, blocks, nextId: L.nextId,
+        marginPct: L.marginPct, snap: L.snap,
+        loadedFonts: L.loadedFonts, customFonts: L.customFonts,
+        blocks, nextId: L.nextId,
       }));
       if (skipped && !saveLayoutSettings._warned) {
         saveLayoutSettings._warned = true;
@@ -2387,10 +2699,16 @@ function loadLayoutStorage() {
     if (Array.isArray(saved.loadedFonts)) L.loadedFonts = saved.loadedFonts;
     if (Array.isArray(saved.blocks)) L.blocks = saved.blocks;
     if (saved.nextId) L.nextId = saved.nextId;
+    if (saved.marginPct !== undefined) L.marginPct = saved.marginPct;
+    if (saved.snap !== undefined) L.snap = saved.snap;
+    if (Array.isArray(saved.customFonts)) L.customFonts = saved.customFonts;
     document.getElementById('lay-blur-slider').value = L.blur;
     document.getElementById('lay-blur-val').textContent = L.blur + 'px';
     document.getElementById('lay-darken-slider').value = L.darken;
     document.getElementById('lay-darken-val').textContent = L.darken + '%';
+    document.getElementById('lay-margin').value = L.marginPct;
+    document.getElementById('lay-margin-val').textContent = L.marginPct + '%';
+    document.getElementById('lay-snap').checked = !!L.snap;
     document.querySelectorAll('#lay-ratio-row .crop-btn').forEach(b =>
       b.classList.toggle('active', b.dataset.ratio === L.cropRatio));
   } catch (e) { console.warn('loadLayoutStorage error:', e); }
@@ -2420,6 +2738,9 @@ function initLayoutMode() {
   });
   initLayoutEditor();
   loadLayoutStorage();
+  populateFontSelect();      // re-populate after custom fonts restore
+  renderCustomFontList();
+  loadImgLib();
 }
 
 // ══════════════════════════════════════════
