@@ -188,6 +188,7 @@
   .btn-accent { background: var(--accent); color: #0e0e0f; }
   .btn-accent:hover { background: var(--accent2); }
   .btn-sm { padding: 8px 13px; font-size: 10px; letter-spacing: 0.1em; }
+  .btn-ico { font-size: 12px; line-height: 1; font-family: 'DM Mono', monospace; letter-spacing: 0; }
   .btn-full { width: 100%; }
   .btn-row { display: flex; gap: 6px; }
 
@@ -636,10 +637,10 @@
         <div class="section" id="layout-props" style="display:none;">
           <div class="section-label">Selected Block</div>
           <div class="btn-row" style="margin-bottom:14px;">
-            <button class="btn btn-ghost btn-sm" onclick="blockOp('front')">Front</button>
-            <button class="btn btn-ghost btn-sm" onclick="blockOp('back')">Back</button>
-            <button class="btn btn-ghost btn-sm" onclick="blockOp('dup')">Dup</button>
-            <button class="btn btn-ghost btn-sm" onclick="blockOp('del')" style="color:var(--red);">Del</button>
+            <button class="btn btn-ghost btn-sm" onclick="blockOp('front')" title="Bring to front"><span class="btn-ico">⏶</span>Front</button>
+            <button class="btn btn-ghost btn-sm" onclick="blockOp('back')" title="Send to back"><span class="btn-ico">⏷</span>Back</button>
+            <button class="btn btn-ghost btn-sm" onclick="blockOp('dup')" title="Duplicate block"><span class="btn-ico">⧉</span>Dup</button>
+            <button class="btn btn-ghost btn-sm" onclick="blockOp('del')" title="Delete block" style="color:var(--red);"><span class="btn-ico">✕</span>Del</button>
           </div>
           <div id="layout-props-text">
             <div class="field-row">
