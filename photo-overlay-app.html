@@ -870,8 +870,12 @@
           <div class="preset-list" id="grid-cell-list" style="max-height:220px;"></div>
           <button class="btn btn-ghost btn-sm btn-full" style="margin-top:8px;" onclick="clearAllGridCells()">Clear All</button>
         </div>
-        <div class="section" id="grid-cellcap-section" style="display:none;">
-          <div class="section-label">Cell <span id="gcc-cellnum"></span> Caption</div>
+        <input type="file" id="grid-cell-file" accept="image/*" style="display:none;">
+      </div>
+      <div class="tab-panel" id="tab-g-caption">
+        <div class="section" id="grid-cellcap-section">
+          <div class="section-label">Cell Captions</div>
+          <div class="count-grid" id="gcc-cellpick" style="margin-bottom:12px;"></div>
           <div class="field-row">
             <div class="field-label">Text</div>
             <input type="text" id="gcc-text" placeholder="e.g. 85mm · f1.4" oninput="setCellCapProp('text',this.value)">
@@ -901,9 +905,6 @@
             <span class="slider-val" id="gcc-offset-val">3%</span>
           </div>
         </div>
-        <input type="file" id="grid-cell-file" accept="image/*" style="display:none;">
-      </div>
-      <div class="tab-panel" id="tab-g-caption">
         <div class="section">
           <div class="section-label">Caption Band</div>
           <div class="field-row">
@@ -3481,11 +3482,11 @@ window.setCellCapProp = (key, val) => {
 };
 
 function updateCellCapPanel() {
-  const sec = document.getElementById('grid-cellcap-section');
+  const n = cellCount();
+  if (G.selCell === null || G.selCell === undefined || G.selCell >= n) G.selCell = 0;
   const i = G.selCell;
-  if (i === null || i === undefined || i >= cellCount()) { sec.style.display = 'none'; return; }
-  sec.style.display = '';
-  document.getElementById('gcc-cellnum').textContent = i + 1;
+  document.getElementById('gcc-cellpick').innerHTML = Array.from({ length: n }, (_, k) =>
+    `<button class="crop-btn${k === i ? ' active' : ''}" onclick="selectGridCell(${k})">${k + 1}</button>`).join('');
   const cap = (G.cells[i] && G.cells[i].caption) || capDefaults();
   document.getElementById('gcc-text').value = cap.text;
   document.querySelectorAll('#gcc-pos .crop-btn').forEach(b => b.classList.toggle('active', b.dataset.pos === cap.pos));
@@ -3607,7 +3608,8 @@ function renderGridCellsDom() {
       cd.className = 'grid-cell-cap';
       cd.textContent = cap.text;
       let css = `font-family:"${cap.family}",'Helvetica Neue',Arial,sans-serif;` +
-                `font-size:${sizePx}px;line-height:${sizePx * 1.2}px;color:${cap.color};`;
+                `font-size:${sizePx}px;line-height:${sizePx * 1.2}px;color:${cap.color};` +
+                `text-shadow:0 ${sizePx * 0.06}px ${sizePx * 0.12}px rgba(0,0,0,0.6);`;
       const row = cap.pos[0], col = cap.pos[1];
       if (row === 't') css += `top:${off}px;`;
       else if (row === 'b') css += `bottom:${off}px;`;
@@ -3739,6 +3741,10 @@ function drawCellCaption(ctx, cap, r) {
   ctx.fillStyle = cap.color;
   ctx.font = `400 ${sizePx}px "${cap.family}", 'Helvetica Neue', Arial, sans-serif`;
   ctx.textBaseline = 'alphabetic';
+  // legibility shadow — same proportional values as the DOM preview
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowBlur = sizePx * 0.12;
+  ctx.shadowOffsetY = sizePx * 0.06;
   const total = m.lines.length * m.lineHPx;
   const row = cap.pos[0], col = cap.pos[1];
   let boxTop;
@@ -3813,6 +3819,7 @@ function initGridMode() {
   const capSp = fontSpec(G.caption.family);
   if (capSp && !capSp.sys) ensureFontLoaded(G.caption.family, 400).then(() => renderGridAll());
   renderCellList();
+  updateCellCapPanel();
   renderGridAll();
 }
 
