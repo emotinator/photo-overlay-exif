@@ -905,6 +905,16 @@
             <input type="range" id="gcc-offset" min="0" max="15" step="0.5" oninput="setCellCapProp('offsetPct',+this.value)">
             <span class="slider-val" id="gcc-offset-val">3%</span>
           </div>
+          <div class="slider-row">
+            <span class="slider-label">Opacity</span>
+            <input type="range" id="gcc-opacity" min="5" max="100" oninput="setCellCapProp('opacity',+this.value)">
+            <span class="slider-val" id="gcc-opacity-val">100%</span>
+          </div>
+          <div class="field-row" style="margin-top:6px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);">
+              <input type="checkbox" id="gcc-shadow" checked onchange="setCellCapProp('shadow',this.checked)" style="accent-color:var(--accent);">Drop shadow
+            </label>
+          </div>
         </div>
         <div class="section">
           <div class="section-label">Caption Band</div>
@@ -3356,7 +3366,7 @@ const G = {
 // pushed inward by offset; sizes are % of the CELL width so captions scale
 // with the layout.
 function capDefaults() {
-  return { text: '', pos: 'bc', offsetPct: 3, family: 'Helvetica Neue', sizePct: 3, color: '#ffffff' };
+  return { text: '', pos: 'bc', offsetPct: 3, family: 'Helvetica Neue', sizePct: 3, color: '#ffffff', opacity: 100, shadow: true };
 }
 S.grid = G;
 const GV = { W: 0, H: 0, capH: 0 };   // display metrics
@@ -3497,6 +3507,7 @@ window.setCellCapProp = (key, val) => {
   cell.caption[key] = val;
   if (key === 'sizePct') document.getElementById('gcc-size-val').textContent = val + '%';
   if (key === 'offsetPct') document.getElementById('gcc-offset-val').textContent = val + '%';
+  if (key === 'opacity') document.getElementById('gcc-opacity-val').textContent = val + '%';
   if (key === 'pos') updateCellCapPanel();
   if (key === 'family') {
     const sp = fontSpec(val);
@@ -3519,6 +3530,9 @@ function updateCellCapPanel() {
   document.getElementById('gcc-size-val').textContent = cap.sizePct + '%';
   document.getElementById('gcc-offset').value = cap.offsetPct;
   document.getElementById('gcc-offset-val').textContent = cap.offsetPct + '%';
+  document.getElementById('gcc-opacity').value = cap.opacity ?? 100;
+  document.getElementById('gcc-opacity-val').textContent = (cap.opacity ?? 100) + '%';
+  document.getElementById('gcc-shadow').checked = cap.shadow !== false;
   document.getElementById('gcc-color').value = cap.color;
 }
 
@@ -3633,7 +3647,8 @@ function renderGridCellsDom() {
       cd.textContent = cap.text;
       let css = `font-family:"${cap.family}",'Helvetica Neue',Arial,sans-serif;` +
                 `font-size:${sizePx}px;line-height:${sizePx * 1.2}px;color:${cap.color};` +
-                `text-shadow:0 ${sizePx * 0.06}px ${sizePx * 0.12}px rgba(0,0,0,0.6);`;
+                `opacity:${(cap.opacity ?? 100) / 100};`;
+      if (cap.shadow !== false) css += `text-shadow:0 ${sizePx * 0.06}px ${sizePx * 0.12}px rgba(0,0,0,0.6);`;
       const row = cap.pos[0], col = cap.pos[1];
       if (row === 't') css += `top:${off}px;`;
       else if (row === 'b') css += `bottom:${off}px;`;
@@ -3765,13 +3780,16 @@ function drawCellCaption(ctx, cap, r) {
   const m = measureWrap(spec);
   ctx.save();
   ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+  ctx.globalAlpha = (cap.opacity ?? 100) / 100;
   ctx.fillStyle = cap.color;
   ctx.font = `400 ${sizePx}px "${cap.family}", 'Helvetica Neue', Arial, sans-serif`;
   ctx.textBaseline = 'alphabetic';
-  // legibility shadow — same proportional values as the DOM preview
-  ctx.shadowColor = 'rgba(0,0,0,0.6)';
-  ctx.shadowBlur = sizePx * 0.12;
-  ctx.shadowOffsetY = sizePx * 0.06;
+  if (cap.shadow !== false) {
+    // legibility shadow — same proportional values as the DOM preview
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = sizePx * 0.12;
+    ctx.shadowOffsetY = sizePx * 0.06;
+  }
   const total = m.lines.length * m.lineHPx;
   const row = cap.pos[0], col = cap.pos[1];
   let boxTop;
