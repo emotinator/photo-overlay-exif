@@ -58,6 +58,21 @@
     flex-shrink: 0;
   }
   .theme-toggle:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+  /* ── Mode Switch ── */
+  .mode-switch {
+    display: flex; gap: 2px; align-items: center;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 20px; padding: 3px;
+  }
+  .mode-btn {
+    border: none; background: transparent; color: var(--text3);
+    font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 300;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    padding: 6px 14px; border-radius: 16px; cursor: pointer; transition: all 0.15s;
+  }
+  .mode-btn:hover:not(.active) { color: var(--text2); }
+  .mode-btn.active { background: var(--accent-dim); color: var(--accent); font-weight: 900; }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: 'Syne', sans-serif;
@@ -84,6 +99,10 @@
     width: var(--panel); background: var(--surface); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
   }
+  .mode-pane { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+  body[data-mode="exif"] #pane-exif,
+  body[data-mode="layout"] #pane-layout,
+  body[data-mode="grid"] #pane-grid { display: flex; }
   .sidebar-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .tab-btn {
     flex: 1; padding: 14px 6px; background: none; border: none; color: var(--text3);
@@ -218,6 +237,62 @@
   .preview-actions { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
   .preview-dim { font-size: 13px; color: var(--text3); font-family: 'DM Mono', monospace; margin-right: 6px; }
 
+  /* ── Layout Stage (M0 mock) ── */
+  #layout-stage { display: none; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 20px; }
+  #layout-stage.active { display: flex; }
+  .layout-frame {
+    position: relative; container-type: inline-size;
+    aspect-ratio: 4 / 5; height: calc(100vh - 58px - 58px - 120px); max-width: calc(100% - 8px);
+    background:
+      radial-gradient(circle at 32% 26%, var(--surface3), transparent 62%),
+      linear-gradient(160deg, var(--surface2), var(--surface));
+    border: 1px solid var(--border2); border-radius: 3px; overflow: hidden;
+    box-shadow: 0 8px 48px rgba(0,0,0,0.35);
+  }
+  #layout-editor { position: absolute; inset: 0; }
+  .lblock {
+    position: absolute; cursor: grab; user-select: none; -webkit-user-select: none;
+    touch-action: none; color: var(--text);
+  }
+  .lblock.dragging { cursor: grabbing; }
+  .lblock.selected { outline: 1.5px solid var(--accent); }
+  .ldemo-title { font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase; line-height: 1.05; letter-spacing: 0.02em; }
+  .ldemo-credits { font-family: 'DM Mono', monospace; font-weight: 400; line-height: 1.55; white-space: pre-line; color: var(--text2); }
+  .ldemo-logo {
+    border: 1.5px dashed var(--border2); border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Montserrat', sans-serif; font-weight: 300; letter-spacing: 0.25em; color: var(--text3);
+  }
+  .lblock-handle {
+    position: absolute; width: 10px; height: 10px; background: var(--accent);
+    border: 1.5px solid var(--bg); border-radius: 2px; z-index: 5; display: none;
+  }
+  .lblock.selected .lblock-handle { display: block; }
+  .lblock-handle[data-h="nw"] { top: -6px; left: -6px; cursor: nwse-resize; }
+  .lblock-handle[data-h="ne"] { top: -6px; right: -6px; cursor: nesw-resize; }
+  .lblock-handle[data-h="sw"] { bottom: -6px; left: -6px; cursor: nesw-resize; }
+  .lblock-handle[data-h="se"] { bottom: -6px; right: -6px; cursor: nwse-resize; }
+  .lblock-handle[data-h="e"]  { top: calc(50% - 5px); right: -6px; cursor: ew-resize; }
+  .lblock-handle[data-h="w"]  { top: calc(50% - 5px); left: -6px; cursor: ew-resize; }
+
+  /* ── Grid Stage (M0 mock) ── */
+  #grid-stage { display: none; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 20px; }
+  #grid-stage.active { display: flex; }
+  .grid-frame {
+    display: flex; flex-direction: column;
+    height: calc(100vh - 58px - 58px - 120px); max-width: calc(100% - 8px);
+    background: var(--surface); border: 1px solid var(--border2); border-radius: 3px;
+    box-shadow: 0 8px 48px rgba(0,0,0,0.35);
+  }
+  .grid-row { display: flex; flex: 1; min-height: 0; }
+  .grid-cell {
+    flex: 1; background: var(--surface2); border: 1.5px dashed var(--border2); border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text3);
+  }
+  .count-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .count-grid .crop-btn { padding: 8px 0; }
+
   /* ── Export Bar ── */
   .export-bar {
     height: 58px; flex-shrink: 0; border-top: 1px solid var(--border);
@@ -262,10 +337,15 @@
   .toast.error { border-color: var(--red); color: var(--red); }
 </style>
 </head>
-<body>
+<body data-mode="exif">
 
 <header>
   <div class="logo">PHOTO OVERLAY <span>EXIF</span></div>
+  <div class="mode-switch">
+    <button class="mode-btn active" data-mode="exif" onclick="switchMode('exif')">EXIF</button>
+    <button class="mode-btn" data-mode="layout" onclick="switchMode('layout')">Layout</button>
+    <button class="mode-btn" data-mode="grid" onclick="switchMode('grid')">Grid</button>
+  </div>
   <div class="header-actions">
     <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">☀</button>
     <button class="btn btn-ghost btn-sm" onclick="exportSettings('json')">↓ .json</button>
@@ -276,10 +356,13 @@
 <div class="app-body">
   <!-- SIDEBAR -->
   <div class="sidebar">
+
+    <!-- EXIF PANE -->
+    <div class="mode-pane" id="pane-exif">
     <div class="sidebar-tabs">
-      <button class="tab-btn active" onclick="switchTab('image')">Image</button>
-      <button class="tab-btn" onclick="switchTab('overlay')">Overlay</button>
-      <button class="tab-btn" onclick="switchTab('profile')">Profile</button>
+      <button class="tab-btn active" data-tab="image" onclick="switchTab('image',this)">Image</button>
+      <button class="tab-btn" data-tab="overlay" onclick="switchTab('overlay',this)">Overlay</button>
+      <button class="tab-btn" data-tab="profile" onclick="switchTab('profile',this)">Profile</button>
     </div>
 
     <!-- IMAGE TAB -->
@@ -289,7 +372,7 @@
         <div class="drop-zone" id="drop-zone">
           <input type="file" id="file-input" accept="image/*">
           <div class="drop-icon">⬆</div>
-          <div class="drop-text"><strong>Click or drag & drop</strong><br>JPEG · PNG · TIFF · HEIC</div>
+          <div class="drop-text"><strong>Click, drag & drop, or paste</strong><br>JPEG · PNG · TIFF · HEIC</div>
         </div>
       </div>
 
@@ -447,6 +530,80 @@
         </div>
       </div>
     </div>
+    </div><!-- /pane-exif -->
+
+    <!-- LAYOUT PANE (M0 mock) -->
+    <div class="mode-pane" id="pane-layout">
+      <div class="sidebar-tabs">
+        <button class="tab-btn active" data-tab="l-blocks" onclick="switchTab('l-blocks',this)">Blocks</button>
+      </div>
+      <div class="tab-panel active" id="tab-l-blocks">
+        <div class="section">
+          <div class="section-label">Blocks</div>
+          <div class="preset-list" id="layout-block-list"></div>
+          <div class="field-row" style="margin-top:10px;">
+            <div class="field-label">Selected</div>
+            <div class="exif-item"><div class="exif-item-val" id="layout-selected-name">—</div></div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="drop-text" style="text-align:left;">M0 mock — drag blocks to move, corner handles to resize, <strong>Esc</strong> to deselect. Image loading, fonts, snapping and export arrive in M1–M2.</div>
+        </div>
+      </div>
+    </div><!-- /pane-layout -->
+
+    <!-- GRID PANE (M0 mock) -->
+    <div class="mode-pane" id="pane-grid">
+      <div class="sidebar-tabs">
+        <button class="tab-btn active" data-tab="g-layout" onclick="switchTab('g-layout',this)">Layout</button>
+        <button class="tab-btn" data-tab="g-cells" onclick="switchTab('g-cells',this)">Cells</button>
+        <button class="tab-btn" data-tab="g-caption" onclick="switchTab('g-caption',this)">Caption</button>
+      </div>
+      <div class="tab-panel active" id="tab-g-layout">
+        <div class="section">
+          <div class="section-label">Cells</div>
+          <div class="count-grid" id="grid-count-picker"></div>
+        </div>
+        <div class="section" id="grid-variant-section" style="display:none;">
+          <div class="section-label">Arrangement</div>
+          <div class="crop-toggle">
+            <button class="crop-btn active" id="grid-var-h" onclick="setGridVariant(0)">Horizontal</button>
+            <button class="crop-btn" id="grid-var-v" onclick="setGridVariant(1)">Vertical</button>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-label">Canvas Ratio</div>
+          <div class="crop-toggle">
+            <button class="crop-btn active" id="grid-ratio-11" onclick="setGridRatio('1:1')">1 : 1</button>
+            <button class="crop-btn" id="grid-ratio-45" onclick="setGridRatio('4:5')">4 : 5</button>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-label">Gutter</div>
+          <div class="slider-row">
+            <span class="slider-label">Width</span>
+            <input type="range" id="grid-gutter" min="0" max="24" value="6" oninput="setGridGutter(+this.value)">
+            <span class="slider-val" id="grid-gutter-val">6px</span>
+          </div>
+        </div>
+        <div class="section">
+          <div class="drop-text" style="text-align:left;">M0 mock — cells are placeholders. Per-cell images, cropping and export arrive in M3.</div>
+        </div>
+      </div>
+      <div class="tab-panel" id="tab-g-cells">
+        <div class="section">
+          <div class="section-label">Cells</div>
+          <div class="preset-empty">Per-cell images &amp; crop — coming in M3</div>
+        </div>
+      </div>
+      <div class="tab-panel" id="tab-g-caption">
+        <div class="section">
+          <div class="section-label">Caption</div>
+          <div class="preset-empty">Caption band — coming in M3</div>
+        </div>
+      </div>
+    </div><!-- /pane-grid -->
+
   </div>
 
   <!-- CENTER -->
@@ -480,6 +637,24 @@
       <div class="preview-actions">
         <span class="preview-dim" id="preview-dim"></span>
         <button class="btn btn-ghost btn-sm" onclick="enterCropMode()">✂ Re-crop</button>
+      </div>
+    </div>
+
+    <!-- LAYOUT STAGE (M0 mock) -->
+    <div id="layout-stage">
+      <div class="layout-frame">
+        <div id="layout-editor"></div>
+      </div>
+      <div class="crop-hint" style="margin-top:13px;">
+        Drag to move &nbsp;·&nbsp; corner handles to resize &nbsp;·&nbsp; <kbd>Esc</kbd> deselect
+      </div>
+    </div>
+
+    <!-- GRID STAGE (M0 mock) -->
+    <div id="grid-stage">
+      <div class="grid-frame" id="grid-frame"></div>
+      <div class="crop-hint" style="margin-top:13px;">
+        Pick a cell count &amp; ratio in the sidebar — placeholder cells only in M0
       </div>
     </div>
 
@@ -611,6 +786,11 @@ document.addEventListener('DOMContentLoaded', () => {
       sizeCropCanvas(); drawCropViewport();
     }
   });
+
+  // M0 mode-shell mocks
+  renderLayoutBlocks();
+  initLayoutEditor();
+  initGridPicker();
 });
 
 // Keys that map directly from saved settings → state → slider/input element id
@@ -722,13 +902,28 @@ function loadFromStorage() {
 }
 
 // ══════════════════════════════════════════
-// TABS
+// MODES
 // ══════════════════════════════════════════
-window.switchTab = tab => {
-  const names = ['image','overlay','profile'];
-  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', names[i]===tab));
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('tab-'+tab).classList.add('active');
+let MODE = 'exif';
+let currentStage = 'empty';
+const stageByMode = { exif: 'empty', layout: 'layout', grid: 'grid' };
+
+window.switchMode = mode => {
+  if (mode === MODE) return;
+  stageByMode[MODE] = currentStage;
+  MODE = mode;
+  document.body.dataset.mode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  showStage(stageByMode[mode]);
+};
+
+// ══════════════════════════════════════════
+// TABS (scoped to the active mode pane)
+// ══════════════════════════════════════════
+window.switchTab = (tab, btn) => {
+  const pane = btn ? btn.closest('.mode-pane') : document.getElementById('pane-' + MODE);
+  pane.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  pane.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
 };
 
 // ══════════════════════════════════════════
@@ -774,6 +969,20 @@ function setupDropZone() {
     zone.classList.remove('dragover');
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('image/')) loadImage(file);
+  });
+
+  // ── Paste from clipboard ───────────────────────
+  window.addEventListener('paste', e => {
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) loadImage(file);
+        return;
+      }
+    }
   });
 }
 
@@ -843,9 +1052,12 @@ window.enterCropMode = () => {
 };
 
 function showStage(name) {
-  document.getElementById('empty-state').style.display = 'none';
+  currentStage = name;
+  document.getElementById('empty-state').style.display = name === 'empty' ? '' : 'none';
   document.getElementById('crop-stage').classList.toggle('active', name==='crop');
   document.getElementById('preview-stage').classList.toggle('active', name==='preview');
+  document.getElementById('layout-stage').classList.toggle('active', name==='layout');
+  document.getElementById('grid-stage').classList.toggle('active', name==='grid');
 }
 
 function sizeCropCanvas() {
@@ -1035,7 +1247,7 @@ window.applyCrop = () => {
 
 window.cancelCrop = () => {
   if (S.cropApplied) showStage('preview');
-  else { document.getElementById('empty-state').style.display=''; document.getElementById('crop-stage').classList.remove('active'); }
+  else showStage('empty');
 };
 
 // ══════════════════════════════════════════
@@ -1340,6 +1552,199 @@ window.exportSettings = async (format) => {
   toast(`Settings exported as .${ext}`, 'success');
 };
 
+
+// ══════════════════════════════════════════
+// LAYOUT MODE — M0 mock (dummy blocks, drag/resize)
+// ══════════════════════════════════════════
+// Geometry in % of frame dims; font size in cqw (% of frame width via container query units)
+const L0 = {
+  blocks: [
+    { id:'b1', name:'Title',   type:'text',  x:8,  y:10, w:80, fs:9,   cls:'ldemo-title',   text:'EDITORIAL' },
+    { id:'b2', name:'Credits', type:'text',  x:8,  y:76, w:46, fs:2.6, cls:'ldemo-credits', text:'photo — elmer eraña\nmua — jane doe\nstyling — j. smith' },
+    { id:'b3', name:'Logo',    type:'image', x:64, y:5,  w:28, aspect:2.6 },
+  ],
+  selected: null,
+};
+
+function renderLayoutBlocks() {
+  const ed = document.getElementById('layout-editor');
+  ed.innerHTML = '';
+  L0.blocks.forEach(b => {
+    const el = document.createElement('div');
+    el.className = 'lblock' + (b.cls ? ' ' + b.cls : '') + (L0.selected === b.id ? ' selected' : '');
+    el.dataset.id = b.id; el.dataset.type = b.type;
+    el.style.left = b.x + '%'; el.style.top = b.y + '%'; el.style.width = b.w + '%';
+    if (b.type === 'text') { el.style.fontSize = b.fs + 'cqw'; el.textContent = b.text; }
+    else { el.classList.add('ldemo-logo'); el.style.aspectRatio = b.aspect; el.style.fontSize = '2cqw'; el.textContent = 'LOGO'; }
+    const handles = b.type === 'text' ? ['nw','ne','sw','se','e','w'] : ['nw','ne','sw','se'];
+    handles.forEach(h => {
+      const hd = document.createElement('div');
+      hd.className = 'lblock-handle'; hd.dataset.h = h;
+      el.appendChild(hd);
+    });
+    ed.appendChild(el);
+  });
+  renderLayoutBlockList();
+}
+
+function renderLayoutBlockList() {
+  const list = document.getElementById('layout-block-list');
+  list.innerHTML = L0.blocks.map(b =>
+    `<div class="preset-item" style="cursor:pointer;${L0.selected===b.id?'border-color:var(--accent);':''}" onclick="selectLayoutBlock('${b.id}')"><span class="preset-name">${b.name}</span></div>`
+  ).join('');
+  const sel = L0.blocks.find(b => b.id === L0.selected);
+  document.getElementById('layout-selected-name').textContent = sel ? sel.name : '—';
+}
+window.selectLayoutBlock = id => { L0.selected = id; renderLayoutBlocks(); };
+
+// Pointer state machine: transform-only during drag, commit % geometry on pointerup
+let LDRAG = null;
+
+function calcResize(d, dx) {
+  const startWpx = d.startW / 100 * d.frameW;
+  let x = d.startX, w = d.startW, fs = d.startFs;
+  if (d.h === 'e') {
+    w = Math.max(8, d.startW + dx / d.frameW * 100);
+  } else if (d.h === 'w') {
+    w = Math.max(8, d.startW - dx / d.frameW * 100);
+    x = d.startX + (d.startW - w);
+  } else { // corners: uniform scale (width + font together)
+    const sign = (d.h === 'ne' || d.h === 'se') ? 1 : -1;
+    let f = Math.max(0.15, (startWpx + sign * dx) / startWpx);
+    w = d.startW * f;
+    if (w < 6) { w = 6; f = w / d.startW; }
+    if (sign < 0) x = d.startX + (d.startW - w);
+    fs = d.startFs * f;
+  }
+  return { x, w, fs };
+}
+
+function initLayoutEditor() {
+  const ed = document.getElementById('layout-editor');
+
+  ed.addEventListener('pointerdown', e => {
+    const handle = e.target.closest('.lblock-handle');
+    const blockEl = e.target.closest('.lblock');
+    if (!blockEl) { L0.selected = null; renderLayoutBlocks(); return; }
+    const b = L0.blocks.find(x => x.id === blockEl.dataset.id);
+    if (L0.selected !== b.id) { L0.selected = b.id; renderLayoutBlocks(); }
+    const el = ed.querySelector(`.lblock[data-id="${b.id}"]`); // re-query: render may have replaced the node
+    e.preventDefault();
+    ed.setPointerCapture(e.pointerId);
+    LDRAG = {
+      mode: handle ? 'resize' : 'move',
+      h: handle ? handle.dataset.h : null,
+      b, el,
+      frameW: ed.clientWidth, frameH: ed.clientHeight,
+      sx: e.clientX, sy: e.clientY,
+      startX: b.x, startY: b.y, startW: b.w, startFs: b.fs || 0,
+    };
+    if (!handle) el.classList.add('dragging');
+  });
+
+  ed.addEventListener('pointermove', e => {
+    if (!LDRAG) return;
+    const d = LDRAG, dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+    if (d.mode === 'move') {
+      d.el.style.transform = `translate(${dx}px, ${dy}px)`;
+    } else {
+      const g = calcResize(d, dx);
+      d.el.style.left = g.x + '%';
+      d.el.style.width = g.w + '%';
+      if (d.b.type === 'text') d.el.style.fontSize = g.fs + 'cqw';
+    }
+  });
+
+  const finish = e => {
+    if (!LDRAG) return;
+    const d = LDRAG; LDRAG = null;
+    const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+    if (d.mode === 'move') {
+      d.b.x = Math.max(-d.b.w + 4, Math.min(96, d.startX + dx / d.frameW * 100));
+      d.b.y = Math.max(-2, Math.min(96, d.startY + dy / d.frameH * 100));
+    } else {
+      const g = calcResize(d, dx);
+      d.b.x = g.x; d.b.w = g.w;
+      if (d.b.type === 'text') d.b.fs = g.fs;
+    }
+    renderLayoutBlocks();
+  };
+  ed.addEventListener('pointerup', finish);
+  ed.addEventListener('pointercancel', () => { if (LDRAG) { LDRAG = null; renderLayoutBlocks(); } });
+
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && MODE === 'layout' && L0.selected) { L0.selected = null; renderLayoutBlocks(); }
+  });
+}
+
+// ══════════════════════════════════════════
+// GRID MODE — M0 mock (layout picker + placeholder cells)
+// ══════════════════════════════════════════
+// Each entry: array of variants; each variant: cells-per-row spec.
+// Variant 0 = default; variants only for counts 2–3 (horizontal / vertical).
+const GRID_SPECS = {
+  1: [[1]],
+  2: [[2], [1,1]],
+  3: [[3], [1,1,1]],
+  4: [[2,2]],
+  5: [[2,3]],
+  6: [[3,3]],
+  7: [[3,4]],
+  8: [[4,4]],
+  9: [[3,3,3]],
+  10: [[3,3,4]],
+  11: [[3,4,4]],
+  12: [[4,4,4]],
+};
+const G0 = { ratio: '1:1', count: 4, variant: 0, gutter: 6 };
+
+window.setGridCount = n => {
+  G0.count = n;
+  if (!GRID_SPECS[n][G0.variant]) G0.variant = 0;
+  document.querySelectorAll('#grid-count-picker .crop-btn').forEach(b => b.classList.toggle('active', +b.textContent === n));
+  document.getElementById('grid-variant-section').style.display = GRID_SPECS[n].length > 1 ? '' : 'none';
+  renderGridMock();
+};
+window.setGridVariant = v => {
+  G0.variant = v;
+  document.getElementById('grid-var-h').classList.toggle('active', v === 0);
+  document.getElementById('grid-var-v').classList.toggle('active', v === 1);
+  renderGridMock();
+};
+window.setGridRatio = r => {
+  G0.ratio = r;
+  document.getElementById('grid-ratio-11').classList.toggle('active', r === '1:1');
+  document.getElementById('grid-ratio-45').classList.toggle('active', r === '4:5');
+  renderGridMock();
+};
+window.setGridGutter = v => {
+  G0.gutter = v;
+  document.getElementById('grid-gutter-val').textContent = v + 'px';
+  renderGridMock();
+};
+
+function renderGridMock() {
+  const frame = document.getElementById('grid-frame');
+  const rows = GRID_SPECS[G0.count][G0.variant] || GRID_SPECS[G0.count][0];
+  frame.style.aspectRatio = G0.ratio === '1:1' ? '1 / 1' : '4 / 5';
+  frame.style.gap = G0.gutter + 'px';
+  frame.style.padding = G0.gutter + 'px';
+  let i = 1;
+  frame.innerHTML = rows.map(cols =>
+    `<div class="grid-row" style="gap:${G0.gutter}px">` +
+    Array.from({ length: cols }, () => `<div class="grid-cell">${i++}</div>`).join('') +
+    `</div>`
+  ).join('');
+}
+
+function initGridPicker() {
+  const picker = document.getElementById('grid-count-picker');
+  picker.innerHTML = Array.from({ length: 12 }, (_, k) =>
+    `<button class="crop-btn${k + 1 === G0.count ? ' active' : ''}" onclick="setGridCount(${k + 1})">${k + 1}</button>`
+  ).join('');
+  document.getElementById('grid-variant-section').style.display = GRID_SPECS[G0.count].length > 1 ? '' : 'none';
+  renderGridMock();
+}
 
 // ══════════════════════════════════════════
 // TOAST
