@@ -58,6 +58,21 @@
     flex-shrink: 0;
   }
   .theme-toggle:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+  /* ── Mode Switch ── */
+  .mode-switch {
+    display: flex; gap: 2px; align-items: center;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 20px; padding: 3px;
+  }
+  .mode-btn {
+    border: none; background: transparent; color: var(--text3);
+    font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 300;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    padding: 6px 14px; border-radius: 16px; cursor: pointer; transition: all 0.15s;
+  }
+  .mode-btn:hover:not(.active) { color: var(--text2); }
+  .mode-btn.active { background: var(--accent-dim); color: var(--accent); font-weight: 900; }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: 'Syne', sans-serif;
@@ -84,6 +99,10 @@
     width: var(--panel); background: var(--surface); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
   }
+  .mode-pane { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+  body[data-mode="exif"] #pane-exif,
+  body[data-mode="layout"] #pane-layout,
+  body[data-mode="grid"] #pane-grid { display: flex; }
   .sidebar-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .tab-btn {
     flex: 1; padding: 14px 6px; background: none; border: none; color: var(--text3);
@@ -169,6 +188,14 @@
   .btn-accent { background: var(--accent); color: #0e0e0f; }
   .btn-accent:hover { background: var(--accent2); }
   .btn-sm { padding: 8px 13px; font-size: 10px; letter-spacing: 0.1em; }
+  .btn-ico { font-size: 12px; line-height: 1; font-family: 'DM Mono', monospace; letter-spacing: 0; }
+  .border-side-toggle {
+    width: 34px; flex-shrink: 0; padding: 3px 0; border-radius: 3px;
+    font-family: 'Montserrat', sans-serif; font-size: 9px; font-weight: 900; letter-spacing: 0.06em;
+    border: 1px solid var(--border2); background: var(--surface2); color: var(--text3);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .border-side-toggle.out { border-color: var(--accent); color: #0e0e0f; background: var(--accent); }
   .btn-full { width: 100%; }
   .btn-row { display: flex; gap: 6px; }
 
@@ -218,6 +245,81 @@
   .preview-actions { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
   .preview-dim { font-size: 13px; color: var(--text3); font-family: 'DM Mono', monospace; margin-right: 6px; }
 
+  /* ── Layout Stage ── */
+  #layout-stage { display: none; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 20px; }
+  #layout-stage.active { display: flex; }
+  .layout-frame {
+    position: relative; background: var(--surface2);
+    border-radius: 3px; overflow: hidden;
+    box-shadow: 0 8px 48px rgba(0,0,0,0.35);
+  }
+  #layout-bg { position: absolute; top: 0; left: 0; }
+  #layout-editor { position: absolute; inset: 0; }
+  #layout-guides { position: absolute; inset: 0; pointer-events: none; }
+  .lblock {
+    position: absolute; cursor: grab; user-select: none; -webkit-user-select: none;
+    touch-action: none;
+  }
+  .lblock.dragging { cursor: grabbing; }
+  .lblock.selected { outline: 1.5px solid var(--accent); }
+  .lblock-lines { pointer-events: none; }
+  .lblock-line { white-space: pre; }
+  .lblock img { pointer-events: none; display: block; width: 100%; height: 100%; object-fit: contain; }
+  .lblock-edit {
+    position: absolute; z-index: 50;
+    background: rgba(0,0,0,0.35);
+    border: 1px dashed var(--accent); border-radius: 2px;
+    outline: none; resize: none; overflow: hidden;
+    padding: 0; margin: 0; white-space: pre-wrap;
+  }
+  #margin-guide {
+    position: absolute; pointer-events: none; display: none; z-index: 80;
+    border: 1px dashed var(--accent); opacity: 0.4;
+  }
+  .snap-line { position: absolute; pointer-events: none; display: none; z-index: 81; background: var(--accent); }
+  #snap-v { width: 1px; top: 0; bottom: 0; }
+  #snap-h { height: 1px; left: 0; right: 0; }
+  select {
+    width: 100%; background: var(--surface2); border: 1.5px solid var(--border);
+    border-radius: var(--radius); color: var(--text); font-family: 'DM Mono', monospace;
+    font-size: 13px; padding: 8px 10px; outline: none; cursor: pointer;
+  }
+  select:focus { border-color: var(--accent); }
+  input[type=color] {
+    width: 100%; height: 35px; background: var(--surface2);
+    border: 1.5px solid var(--border); border-radius: var(--radius);
+    cursor: pointer; padding: 3px;
+  }
+  .lblock-handle {
+    position: absolute; width: 10px; height: 10px; background: var(--accent);
+    border: 1.5px solid var(--bg); border-radius: 2px; z-index: 5; display: none;
+  }
+  .lblock.selected .lblock-handle { display: block; }
+  .lblock-handle[data-h="nw"] { top: -6px; left: -6px; cursor: nwse-resize; }
+  .lblock-handle[data-h="ne"] { top: -6px; right: -6px; cursor: nesw-resize; }
+  .lblock-handle[data-h="sw"] { bottom: -6px; left: -6px; cursor: nesw-resize; }
+  .lblock-handle[data-h="se"] { bottom: -6px; right: -6px; cursor: nwse-resize; }
+  .lblock-handle[data-h="e"]  { top: calc(50% - 5px); right: -6px; cursor: ew-resize; }
+  .lblock-handle[data-h="w"]  { top: calc(50% - 5px); left: -6px; cursor: ew-resize; }
+
+  /* ── Grid Stage (M0 mock) ── */
+  #grid-stage { display: none; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 20px; }
+  #grid-stage.active { display: flex; }
+  .grid-frame {
+    display: flex; flex-direction: column;
+    height: calc(100vh - 58px - 58px - 120px); max-width: calc(100% - 8px);
+    background: var(--surface); border: 1px solid var(--border2); border-radius: 3px;
+    box-shadow: 0 8px 48px rgba(0,0,0,0.35);
+  }
+  .grid-row { display: flex; flex: 1; min-height: 0; }
+  .grid-cell {
+    flex: 1; background: var(--surface2); border: 1.5px dashed var(--border2); border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text3);
+  }
+  .count-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .count-grid .crop-btn { padding: 8px 0; }
+
   /* ── Export Bar ── */
   .export-bar {
     height: 58px; flex-shrink: 0; border-top: 1px solid var(--border);
@@ -262,10 +364,15 @@
   .toast.error { border-color: var(--red); color: var(--red); }
 </style>
 </head>
-<body>
+<body data-mode="exif">
 
 <header>
   <div class="logo">PHOTO OVERLAY <span>EXIF</span></div>
+  <div class="mode-switch">
+    <button class="mode-btn active" data-mode="exif" onclick="switchMode('exif')">EXIF</button>
+    <button class="mode-btn" data-mode="layout" onclick="switchMode('layout')">Layout</button>
+    <button class="mode-btn" data-mode="grid" onclick="switchMode('grid')">Grid</button>
+  </div>
   <div class="header-actions">
     <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">☀</button>
     <button class="btn btn-ghost btn-sm" onclick="exportSettings('json')">↓ .json</button>
@@ -276,10 +383,13 @@
 <div class="app-body">
   <!-- SIDEBAR -->
   <div class="sidebar">
+
+    <!-- EXIF PANE -->
+    <div class="mode-pane" id="pane-exif">
     <div class="sidebar-tabs">
-      <button class="tab-btn active" onclick="switchTab('image')">Image</button>
-      <button class="tab-btn" onclick="switchTab('overlay')">Overlay</button>
-      <button class="tab-btn" onclick="switchTab('profile')">Profile</button>
+      <button class="tab-btn active" data-tab="image" onclick="switchTab('image',this)">Image</button>
+      <button class="tab-btn" data-tab="overlay" onclick="switchTab('overlay',this)">Overlay</button>
+      <button class="tab-btn" data-tab="profile" onclick="switchTab('profile',this)">Profile</button>
     </div>
 
     <!-- IMAGE TAB -->
@@ -289,7 +399,7 @@
         <div class="drop-zone" id="drop-zone">
           <input type="file" id="file-input" accept="image/*">
           <div class="drop-icon">⬆</div>
-          <div class="drop-text"><strong>Click or drag & drop</strong><br>JPEG · PNG · TIFF · HEIC</div>
+          <div class="drop-text"><strong>Click, drag & drop, or paste</strong><br>JPEG · PNG · TIFF · HEIC</div>
         </div>
       </div>
 
@@ -447,6 +557,303 @@
         </div>
       </div>
     </div>
+    </div><!-- /pane-exif -->
+
+    <!-- LAYOUT PANE -->
+    <div class="mode-pane" id="pane-layout">
+      <div class="sidebar-tabs">
+        <button class="tab-btn active" data-tab="l-image" onclick="switchTab('l-image',this)">Image</button>
+        <button class="tab-btn" data-tab="l-blocks" onclick="switchTab('l-blocks',this)">Blocks</button>
+      </div>
+
+      <div class="tab-panel active" id="tab-l-image">
+        <div class="section">
+          <div class="section-label">Load Image</div>
+          <div class="drop-zone" id="lay-drop-zone">
+            <input type="file" id="lay-file-input" accept="image/*">
+            <div class="drop-icon">⬆</div>
+            <div class="drop-text"><strong>Click, drag &amp; drop, or paste</strong><br>JPEG · PNG · TIFF · HEIC</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;align-items:stretch;">
+            <button class="btn btn-ghost btn-sm" style="flex:1.5;" onclick="createBlankCanvas()">▦ Blank Canvas</button>
+            <input type="color" id="lay-canvas-color" value="#ffffff" oninput="setCanvasColor(this.value)" style="flex:1;height:auto;">
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-label">Border / Matte</div>
+          <div class="field-row" style="margin-bottom:10px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);">
+              <input type="checkbox" id="lay-border-precrop" onchange="setBorderPreCrop(this.checked)" style="accent-color:var(--accent);">Bake into image (pre-crop)
+            </label>
+            <div class="drop-text" style="text-align:left;font-size:12px;margin-top:5px;">ON: the border becomes part of the photo before cropping — the final image keeps the selected aspect ratio (e.g. a polaroid chin). OFF: the border is applied after cropping, per-edge IN/OUT.</div>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Top</span>
+            <input type="range" id="lay-border-top" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('top',+this.value)">
+            <span class="slider-val" id="lay-border-top-val">0%</span>
+            <button class="border-side-toggle" id="lay-border-top-mode" onclick="toggleBorderSide('top')" title="IN masks the image edge · OUT expands the canvas">IN</button>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Right</span>
+            <input type="range" id="lay-border-right" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('right',+this.value)">
+            <span class="slider-val" id="lay-border-right-val">0%</span>
+            <button class="border-side-toggle" id="lay-border-right-mode" onclick="toggleBorderSide('right')" title="IN masks the image edge · OUT expands the canvas">IN</button>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Bottom</span>
+            <input type="range" id="lay-border-bottom" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('bottom',+this.value)">
+            <span class="slider-val" id="lay-border-bottom-val">0%</span>
+            <button class="border-side-toggle" id="lay-border-bottom-mode" onclick="toggleBorderSide('bottom')" title="IN masks the image edge · OUT expands the canvas">IN</button>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Left</span>
+            <input type="range" id="lay-border-left" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('left',+this.value)">
+            <span class="slider-val" id="lay-border-left-val">0%</span>
+            <button class="border-side-toggle" id="lay-border-left-mode" onclick="toggleBorderSide('left')" title="IN masks the image edge · OUT expands the canvas">IN</button>
+          </div>
+          <div class="field-row" style="display:flex;gap:10px;align-items:center;margin-top:8px;">
+            <div class="field-label" style="margin:0;flex:1;">Border Color</div>
+            <input type="color" id="lay-border-color" value="#ffffff" oninput="setBorderProp('color',this.value)" style="flex:1;">
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-label">Aspect Ratio</div>
+          <div class="crop-toggle" id="lay-ratio-row">
+            <button class="crop-btn active" data-ratio="4:5" onclick="setLayoutCropRatio('4:5',this)">4 : 5</button>
+            <button class="crop-btn" data-ratio="1:1" onclick="setLayoutCropRatio('1:1',this)">1 : 1</button>
+            <button class="crop-btn" data-ratio="original" onclick="setLayoutCropRatio('original',this)">Original</button>
+          </div>
+          <div style="margin-top:10px;">
+            <button class="btn btn-ghost btn-sm btn-full" id="lay-recrop-btn" onclick="enterLayoutCropMode()" disabled>✂ Adjust Crop</button>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-label">Background Effects</div>
+          <div class="slider-row">
+            <span class="slider-label">Blur</span>
+            <input type="range" id="lay-blur-slider" min="0" max="30" value="0" oninput="updateLayoutSlider('blur',this,'px','lay-blur-val')">
+            <span class="slider-val" id="lay-blur-val">0px</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Darken</span>
+            <input type="range" id="lay-darken-slider" min="0" max="85" value="0" oninput="updateLayoutSlider('darken',this,'%','lay-darken-val')">
+            <span class="slider-val" id="lay-darken-val">0%</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="tab-panel" id="tab-l-blocks">
+        <div class="section">
+          <div class="section-label">Add Block</div>
+          <div class="btn-row">
+            <button class="btn btn-ghost btn-sm btn-full" onclick="addTextBlockUI()">+ Text</button>
+            <button class="btn btn-ghost btn-sm btn-full" style="position:relative;overflow:hidden;">+ Image
+              <input type="file" id="lay-logo-input" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;">
+            </button>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-label">Margins &amp; Snapping</div>
+          <div class="slider-row">
+            <span class="slider-label">Margin</span>
+            <input type="range" id="lay-margin" min="-10" max="20" step="0.5" value="5" oninput="setLayoutMargin(+this.value)">
+            <span class="slider-val" id="lay-margin-val">5%</span>
+          </div>
+          <div class="field-row" style="margin-top:4px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);">
+              <input type="checkbox" id="lay-snap" checked onchange="L.snap=this.checked?1:0;saveLayoutSettings()" style="accent-color:var(--accent);">Snap to margins &amp; center
+            </label>
+          </div>
+          <div class="drop-text" style="text-align:left;font-size:12px;margin-top:6px;">Hold <strong>Alt</strong> while dragging to bypass snapping</div>
+        </div>
+        <div class="section">
+          <div class="section-label">Image Collection</div>
+          <div class="preset-list" id="imglib-list"><div class="preset-empty">No saved images yet</div></div>
+          <button class="btn btn-ghost btn-sm btn-full" onclick="saveImageToLibrary()">☆ Save Selected Image</button>
+        </div>
+        <div class="section">
+          <div class="section-label">Font Collection</div>
+          <div style="display:flex;gap:6px;">
+            <input type="text" id="lay-font-input" placeholder="Google font name or URL" onkeydown="if(event.key==='Enter')addCustomFont()">
+            <button class="btn btn-ghost btn-sm" onclick="addCustomFont()">Add</button>
+          </div>
+          <div class="preset-list" id="custom-font-list" style="margin-top:8px;margin-bottom:0;"><div class="preset-empty">No custom fonts yet</div></div>
+        </div>
+        <div class="section">
+          <div class="section-label">Blocks</div>
+          <div class="preset-list" id="layout-block-list"><div class="preset-empty">No blocks yet</div></div>
+        </div>
+        <div class="section" id="layout-props" style="display:none;">
+          <div class="section-label">Selected Block</div>
+          <div class="btn-row" style="margin-bottom:14px;">
+            <button class="btn btn-ghost btn-sm" onclick="blockOp('front')" title="Bring to front"><span class="btn-ico">⏶</span>Front</button>
+            <button class="btn btn-ghost btn-sm" onclick="blockOp('back')" title="Send to back"><span class="btn-ico">⏷</span>Back</button>
+            <button class="btn btn-ghost btn-sm" onclick="blockOp('dup')" title="Duplicate block"><span class="btn-ico">⧉</span>Dup</button>
+            <button class="btn btn-ghost btn-sm" onclick="blockOp('del')" title="Delete block" style="color:var(--red);"><span class="btn-ico">✕</span>Del</button>
+          </div>
+          <div id="layout-props-text">
+            <div class="field-row">
+              <div class="field-label">Font</div>
+              <select id="lp-family" onchange="setBlockProp('family',this.value)"></select>
+            </div>
+            <div class="field-row" style="display:flex;gap:8px;">
+              <div style="flex:1;">
+                <div class="field-label">Weight</div>
+                <select id="lp-weight" onchange="setBlockProp('weight',+this.value)"></select>
+              </div>
+              <div style="flex:1;">
+                <div class="field-label">Color</div>
+                <input type="color" id="lp-color" value="#ffffff" oninput="setBlockProp('color',this.value)">
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field-label">Align</div>
+              <div class="crop-toggle">
+                <button class="crop-btn" id="lp-align-left" onclick="setBlockProp('align','left')">Left</button>
+                <button class="crop-btn" id="lp-align-center" onclick="setBlockProp('align','center')">Center</button>
+                <button class="crop-btn" id="lp-align-right" onclick="setBlockProp('align','right')">Right</button>
+              </div>
+            </div>
+            <div class="slider-row" style="margin-top:14px;">
+              <span class="slider-label">Size</span>
+              <input type="range" id="lp-size" min="1" max="18" step="0.1" oninput="setBlockProp('sizePct',+this.value)">
+              <span class="slider-val" id="lp-size-val">4%</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Line Ht</span>
+              <input type="range" id="lp-lineheight" min="80" max="220" oninput="setBlockProp('lineHeight',this.value/100)">
+              <span class="slider-val" id="lp-lineheight-val">125%</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Spacing</span>
+              <input type="range" id="lp-letterspacing" min="-5" max="50" step="0.5" oninput="setBlockProp('letterSpacing',this.value/100)">
+              <span class="slider-val" id="lp-letterspacing-val">0%</span>
+            </div>
+            <div class="field-row" style="margin-top:12px;">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);">
+                <input type="checkbox" id="lp-shadow-on" onchange="setBlockProp('shadowEnabled',this.checked)" style="accent-color:var(--accent);">Drop shadow
+              </label>
+            </div>
+            <div id="lp-shadow-controls" style="opacity:0.35;pointer-events:none;margin-top:6px;">
+              <div class="slider-row">
+                <span class="slider-label">Blur</span>
+                <input type="range" id="lp-shadow-blur" min="0" max="40" oninput="setBlockProp('shadowBlur',+this.value)">
+                <span class="slider-val" id="lp-shadow-blur-val">12px</span>
+              </div>
+              <div class="slider-row">
+                <span class="slider-label">Opacity</span>
+                <input type="range" id="lp-shadow-opacity" min="0" max="100" oninput="setBlockProp('shadowOpacity',+this.value)">
+                <span class="slider-val" id="lp-shadow-opacity-val">70%</span>
+              </div>
+              <div class="slider-row">
+                <span class="slider-label">Offset X</span>
+                <input type="range" id="lp-shadow-x" min="-20" max="20" oninput="setBlockProp('shadowX',+this.value)">
+                <span class="slider-val" id="lp-shadow-x-val">0px</span>
+              </div>
+              <div class="slider-row">
+                <span class="slider-label">Offset Y</span>
+                <input type="range" id="lp-shadow-y" min="-20" max="20" oninput="setBlockProp('shadowY',+this.value)">
+                <span class="slider-val" id="lp-shadow-y-val">2px</span>
+              </div>
+            </div>
+          </div>
+          <div id="layout-props-image">
+            <div class="field-label" style="margin-bottom:8px;">Image Filters</div>
+            <div class="slider-row">
+              <span class="slider-label">Invert</span>
+              <input type="range" id="lp-invert" min="0" max="100" oninput="setBlockProp('invert',+this.value)">
+              <span class="slider-val" id="lp-invert-val">0%</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Grayscale</span>
+              <input type="range" id="lp-grayscale" min="0" max="100" oninput="setBlockProp('grayscale',+this.value)">
+              <span class="slider-val" id="lp-grayscale-val">0%</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Brightness</span>
+              <input type="range" id="lp-brightness" min="0" max="200" oninput="setBlockProp('brightness',+this.value)">
+              <span class="slider-val" id="lp-brightness-val">100%</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Contrast</span>
+              <input type="range" id="lp-contrast" min="0" max="200" oninput="setBlockProp('contrast',+this.value)">
+              <span class="slider-val" id="lp-contrast-val">100%</span>
+            </div>
+            <div class="field-row" style="display:flex;gap:10px;align-items:center;margin-top:10px;">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);flex:1;">
+                <input type="checkbox" id="lp-tint-on" onchange="setBlockProp('tintEnabled',this.checked)" style="accent-color:var(--accent);">Tint
+              </label>
+              <input type="color" id="lp-tint-color" value="#ffffff" oninput="setBlockProp('tintColor',this.value)" style="flex:1;">
+            </div>
+            <div style="margin-top:10px;">
+              <button class="btn btn-ghost btn-sm btn-full" onclick="saveImageToLibrary()">☆ Save to Collection</button>
+            </div>
+          </div>
+          <div class="slider-row" style="margin-top:14px;">
+            <span class="slider-label">Opacity</span>
+            <input type="range" id="lp-opacity" min="5" max="100" oninput="setBlockProp('opacity',+this.value)">
+            <span class="slider-val" id="lp-opacity-val">100%</span>
+          </div>
+        </div>
+        <div class="section">
+          <div class="drop-text" style="text-align:left;">Double-click a text block to edit · <strong>Del</strong> removes · <strong>Esc</strong> deselects</div>
+        </div>
+      </div>
+    </div><!-- /pane-layout -->
+
+    <!-- GRID PANE (M0 mock) -->
+    <div class="mode-pane" id="pane-grid">
+      <div class="sidebar-tabs">
+        <button class="tab-btn active" data-tab="g-layout" onclick="switchTab('g-layout',this)">Layout</button>
+        <button class="tab-btn" data-tab="g-cells" onclick="switchTab('g-cells',this)">Cells</button>
+        <button class="tab-btn" data-tab="g-caption" onclick="switchTab('g-caption',this)">Caption</button>
+      </div>
+      <div class="tab-panel active" id="tab-g-layout">
+        <div class="section">
+          <div class="section-label">Cells</div>
+          <div class="count-grid" id="grid-count-picker"></div>
+        </div>
+        <div class="section" id="grid-variant-section" style="display:none;">
+          <div class="section-label">Arrangement</div>
+          <div class="crop-toggle">
+            <button class="crop-btn active" id="grid-var-h" onclick="setGridVariant(0)">Horizontal</button>
+            <button class="crop-btn" id="grid-var-v" onclick="setGridVariant(1)">Vertical</button>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-label">Canvas Ratio</div>
+          <div class="crop-toggle">
+            <button class="crop-btn active" id="grid-ratio-11" onclick="setGridRatio('1:1')">1 : 1</button>
+            <button class="crop-btn" id="grid-ratio-45" onclick="setGridRatio('4:5')">4 : 5</button>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-label">Gutter</div>
+          <div class="slider-row">
+            <span class="slider-label">Width</span>
+            <input type="range" id="grid-gutter" min="0" max="24" value="6" oninput="setGridGutter(+this.value)">
+            <span class="slider-val" id="grid-gutter-val">6px</span>
+          </div>
+        </div>
+        <div class="section">
+          <div class="drop-text" style="text-align:left;">M0 mock — cells are placeholders. Per-cell images, cropping and export arrive in M3.</div>
+        </div>
+      </div>
+      <div class="tab-panel" id="tab-g-cells">
+        <div class="section">
+          <div class="section-label">Cells</div>
+          <div class="preset-empty">Per-cell images &amp; crop — coming in M3</div>
+        </div>
+      </div>
+      <div class="tab-panel" id="tab-g-caption">
+        <div class="section">
+          <div class="section-label">Caption</div>
+          <div class="preset-empty">Caption band — coming in M3</div>
+        </div>
+      </div>
+    </div><!-- /pane-grid -->
+
   </div>
 
   <!-- CENTER -->
@@ -480,6 +887,34 @@
       <div class="preview-actions">
         <span class="preview-dim" id="preview-dim"></span>
         <button class="btn btn-ghost btn-sm" onclick="enterCropMode()">✂ Re-crop</button>
+      </div>
+    </div>
+
+    <!-- LAYOUT STAGE -->
+    <div id="layout-stage">
+      <div class="layout-frame" id="layout-frame">
+        <canvas id="layout-bg"></canvas>
+        <div id="layout-editor"></div>
+        <div id="layout-guides">
+          <div id="margin-guide"></div>
+          <div id="snap-v" class="snap-line"></div>
+          <div id="snap-h" class="snap-line"></div>
+        </div>
+      </div>
+      <div class="preview-actions">
+        <span class="preview-dim" id="layout-dim"></span>
+        <button class="btn btn-ghost btn-sm" onclick="enterLayoutCropMode()">✂ Re-crop</button>
+      </div>
+      <div class="crop-hint" style="margin-top:8px;">
+        Drag to move &nbsp;·&nbsp; handles resize &nbsp;·&nbsp; double-click text to edit &nbsp;·&nbsp; <kbd>Esc</kbd> deselect
+      </div>
+    </div>
+
+    <!-- GRID STAGE (M0 mock) -->
+    <div id="grid-stage">
+      <div class="grid-frame" id="grid-frame"></div>
+      <div class="crop-hint" style="margin-top:13px;">
+        Pick a cell count &amp; ratio in the sidebar — placeholder cells only in M0
       </div>
     </div>
 
@@ -602,15 +1037,25 @@ document.addEventListener('DOMContentLoaded', () => {
     renderOverlay();
   });
   window.addEventListener('keydown', e => {
-    if ((e.key==='r'||e.key==='R') && document.getElementById('crop-stage').classList.contains('active')) {
+    if ((e.key==='r'||e.key==='R') && cropStageActive()) {
       resetCropTransform(); drawCropViewport();
     }
   });
   window.addEventListener('resize', () => {
-    if (document.getElementById('crop-stage').classList.contains('active') && S.imageBitmap) {
+    if (cropStageActive()) {
       sizeCropCanvas(); drawCropViewport();
     }
+    if (document.getElementById('layout-stage').classList.contains('active') && S.layout.cropApplied) {
+      renderLayoutAll();
+    }
   });
+
+  initCropEvents();
+  initLayoutMode();
+  initGridPicker();
+
+  const savedMode = localStorage.getItem('framedata-mode');
+  if (savedMode === 'layout' || savedMode === 'grid') switchMode(savedMode);
 });
 
 // Keys that map directly from saved settings → state → slider/input element id
@@ -683,7 +1128,7 @@ function loadFromStorage() {
     // Crop ratio
     if (saved.cropRatio) {
       S.cropRatio = saved.cropRatio;
-      document.querySelectorAll('.crop-btn').forEach(b => {
+      document.querySelectorAll('#tab-image .crop-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.ratio === S.cropRatio ||
           (S.cropRatio === '4:5' && b.textContent.includes('4')) ||
           (S.cropRatio === '1:1' && b.textContent.includes('1 : 1')) ||
@@ -722,13 +1167,33 @@ function loadFromStorage() {
 }
 
 // ══════════════════════════════════════════
-// TABS
+// MODES
 // ══════════════════════════════════════════
-window.switchTab = tab => {
-  const names = ['image','overlay','profile'];
-  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', names[i]===tab));
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('tab-'+tab).classList.add('active');
+let MODE = 'exif';
+let currentStage = 'empty';
+const stageByMode = { exif: 'empty', layout: 'empty', grid: 'grid' };
+
+window.switchMode = mode => {
+  if (mode === MODE) return;
+  stageByMode[MODE] = currentStage;
+  MODE = mode;
+  document.body.dataset.mode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  showStage(stageByMode[mode]);
+  try { localStorage.setItem('framedata-mode', mode); } catch {}
+  if (mode === 'layout') {
+    primeLayoutFonts();
+    if (currentStage === 'layout' && S.layout.cropApplied) requestAnimationFrame(renderLayoutAll);
+  }
+};
+
+// ══════════════════════════════════════════
+// TABS (scoped to the active mode pane)
+// ══════════════════════════════════════════
+window.switchTab = (tab, btn) => {
+  const pane = btn ? btn.closest('.mode-pane') : document.getElementById('pane-' + MODE);
+  pane.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  pane.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
 };
 
 // ══════════════════════════════════════════
@@ -773,8 +1238,29 @@ function setupDropZone() {
     document.getElementById('global-drop-overlay').classList.remove('visible');
     zone.classList.remove('dragover');
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) loadImage(file);
+    if (file && file.type.startsWith('image/')) routeImageFile(file);
   });
+
+  // ── Paste from clipboard ───────────────────────
+  window.addEventListener('paste', e => {
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) routeImageFile(file);
+        return;
+      }
+    }
+  });
+}
+
+// Window-level drops & pastes go to the active mode's pipeline
+function routeImageFile(file) {
+  if (MODE === 'layout') loadLayoutImage(file);
+  else if (MODE === 'grid') toast('Dropping into Grid cells arrives in M3', 'error');
+  else loadImage(file);
 }
 
 async function loadImage(file) {
@@ -812,48 +1298,78 @@ async function loadImage(file) {
 // ══════════════════════════════════════════
 window.setCropRatio = (ratio, btn) => {
   S.cropRatio = ratio;
-  document.querySelectorAll('.crop-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#tab-image .crop-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   saveSettings();
-  if (S.imageBitmap) { sizeCropCanvas(); resetCropTransform(); drawCropViewport(); }
+  if (!S.imageBitmap) return;
+  if (CROPX && CROPX.crop === S.crop && currentStage === 'crop') {
+    CROPX.aspect = ratio;
+    sizeCropCanvas(); resetCropTransform(); drawCropViewport();
+  } else {
+    resetCropState({ bitmap: S.imageBitmap, aspect: ratio, crop: S.crop });
+  }
 };
 
-function getOutputDims() {
-  const { width: iw, height: ih } = S.imageBitmap;
-  if (S.cropRatio === '1:1') { const s = Math.min(iw,ih); return { outW:s, outH:s }; }
-  if (S.cropRatio === '4:5') {
-    let w=iw, h=Math.round(iw*5/4);
-    if (h>ih) { h=ih; w=Math.round(ih*4/5); }
-    return { outW:w, outH:h };
-  }
-  return { outW:iw, outH:ih };
+// aspect: '4:5' | '1:1' | 'original' | {w, h} (largest inscribed rect at that ratio)
+function getOutputDims(bitmap, aspect) {
+  const { width: iw, height: ih } = bitmap;
+  if (aspect === 'original' || !aspect) return { outW: iw, outH: ih };
+  let ar;
+  if (aspect === '1:1') ar = 1;
+  else if (aspect === '4:5') ar = 4 / 5;
+  else ar = aspect.w / aspect.h;
+  let w = iw, h = Math.round(iw / ar);
+  if (h > ih) { h = ih; w = Math.round(ih * ar); }
+  return { outW: w, outH: h };
 }
 
 // ══════════════════════════════════════════
-// CROP STAGE
+// CROP STAGE (parameterized — shared by EXIF / Layout / Grid)
 // ══════════════════════════════════════════
-window.enterCropMode = () => {
-  if (!S.imageBitmap) return;
+// Active crop context: { bitmap, aspect, crop (live caller-owned ref),
+//                        applied, onApply, onCancel }
+let CROPX = null;
+
+function openCrop(ctxObj) {
+  CROPX = ctxObj;
   showStage('crop');
   sizeCropCanvas();
   // Only reset transform when entering fresh (not when re-entering after apply)
-  if (!S.cropApplied) resetCropTransform();
+  if (!ctxObj.applied) resetCropTransform();
   drawCropViewport();
-  bindCropEvents();
+}
+
+function cropStageActive() {
+  return !!CROPX && document.getElementById('crop-stage').classList.contains('active');
+}
+
+window.enterCropMode = () => {
+  if (!S.imageBitmap) return;
+  openCrop({
+    bitmap: S.imageBitmap,
+    aspect: S.cropRatio,
+    crop: S.crop,
+    applied: S.cropApplied,
+    onApply:  () => { S.cropApplied = true; showStage('preview'); preloadIcons(() => renderOverlay()); },
+    onCancel: () => { S.cropApplied ? showStage('preview') : showStage('empty'); },
+  });
 };
 
 function showStage(name) {
-  document.getElementById('empty-state').style.display = 'none';
+  currentStage = name;
+  document.getElementById('empty-state').style.display = name === 'empty' ? '' : 'none';
   document.getElementById('crop-stage').classList.toggle('active', name==='crop');
   document.getElementById('preview-stage').classList.toggle('active', name==='preview');
+  document.getElementById('layout-stage').classList.toggle('active', name==='layout');
+  document.getElementById('grid-stage').classList.toggle('active', name==='grid');
 }
 
 function sizeCropCanvas() {
   const area = document.getElementById('canvas-area');
   const aw = area.clientWidth - 48;
   const ah = area.clientHeight - 110;
-  const { outW, outH } = getOutputDims();
-  S.crop.outW = outW; S.crop.outH = outH;
+  const { outW, outH } = getOutputDims(CROPX.bitmap, CROPX.aspect);
+  CROPX.crop.outW = outW; CROPX.crop.outH = outH;
   const ratio = outW / outH;
   let vW = aw, vH = aw / ratio;
   if (vH > ah) { vH = ah; vW = ah * ratio; }
@@ -866,37 +1382,40 @@ function sizeCropCanvas() {
   });
 }
 
-function resetCropTransform() {
-  const { width: iw, height: ih } = S.imageBitmap;
-  const { outW, outH } = getOutputDims();
-  S.crop.outW = outW; S.crop.outH = outH;
+// Pure reset on any crop context (also used for state-only resets outside the stage)
+function resetCropState(cx) {
+  const { width: iw, height: ih } = cx.bitmap;
+  const { outW, outH } = getOutputDims(cx.bitmap, cx.aspect);
+  cx.crop.outW = outW; cx.crop.outH = outH;
   // Scale = 1 means image fits exactly to fill the output frame
-  S.crop.scale = 1;
+  cx.crop.scale = 1;
   // Center the crop within the image
-  S.crop.offsetX = (iw - outW) / 2;
-  S.crop.offsetY = (ih - outH) / 2;
-  clampOffset();
+  cx.crop.offsetX = (iw - outW) / 2;
+  cx.crop.offsetY = (ih - outH) / 2;
+  clampOffsetFor(cx);
 }
+function resetCropTransform() { resetCropState(CROPX); }
 
-function clampOffset() {
-  const { width: iw, height: ih } = S.imageBitmap;
-  const { outW, outH, scale } = S.crop;
+function clampOffsetFor(cx) {
+  const { width: iw, height: ih } = cx.bitmap;
+  const { outW, outH, scale } = cx.crop;
   // At scale > 1, effective image size is bigger
   const effW = iw * scale;
   const effH = ih * scale;
   // offsetX/Y are in the scaled image's pixel space
-  S.crop.offsetX = Math.max(0, Math.min(S.crop.offsetX, effW - outW));
-  S.crop.offsetY = Math.max(0, Math.min(S.crop.offsetY, effH - outH));
+  cx.crop.offsetX = Math.max(0, Math.min(cx.crop.offsetX, effW - outW));
+  cx.crop.offsetY = Math.max(0, Math.min(cx.crop.offsetY, effH - outH));
 }
+function clampOffset() { clampOffsetFor(CROPX); }
 
 function drawCropViewport() {
-  const bmp = S.imageBitmap;
+  const bmp = CROPX.bitmap;
   const cc  = document.getElementById('crop-canvas');
   const ctx = cc.getContext('2d');
   ctx.clearRect(0, 0, CV.W, CV.H);
 
   // Convert from "scaled image space" back to source image coords
-  const { outW, outH, scale, offsetX, offsetY } = S.crop;
+  const { outW, outH, scale, offsetX, offsetY } = CROPX.crop;
   // srcX, srcY, srcW, srcH in the original bitmap
   const srcX = offsetX / scale;
   const srcY = offsetY / scale;
@@ -921,7 +1440,7 @@ function drawCropViewport() {
     gx.beginPath(); gx.moveTo(cx+dx*bl,cy+dy*1); gx.lineTo(cx+dx*1,cy+dy*1); gx.lineTo(cx+dx*1,cy+dy*bl); gx.stroke();
   });
 
-  document.getElementById('zoom-pill').textContent = Math.round(S.crop.scale*100)+'%';
+  document.getElementById('zoom-pill').textContent = Math.round(CROPX.crop.scale*100)+'%';
 }
 
 // ── Drag / Zoom ──────────────────────────────────────
@@ -929,41 +1448,40 @@ let drag = null;
 let lastTouches = null;
 let lastPinchDist = null;
 
-function bindCropEvents() {
-  // Clone to remove old listeners
-  const old = document.getElementById('crop-canvas');
-  const fresh = old.cloneNode(true);
-  old.parentNode.replaceChild(fresh, old);
-  // copy size
-  fresh.width = CV.W; fresh.height = CV.H;
-  fresh.style.width = CV.W+'px'; fresh.style.height = CV.H+'px';
+// Bound ONCE at init. All handlers read the active CROPX and no-op when the
+// crop stage is inactive — no per-entry rebinding, no listener accumulation.
+function initCropEvents() {
+  const cc = document.getElementById('crop-canvas');
 
-  fresh.addEventListener('mousedown', e => {
+  cc.addEventListener('mousedown', e => {
+    if (!cropStageActive()) return;
     e.preventDefault();
-    drag = { sx: e.clientX, sy: e.clientY, ox: S.crop.offsetX, oy: S.crop.offsetY };
+    drag = { sx: e.clientX, sy: e.clientY, ox: CROPX.crop.offsetX, oy: CROPX.crop.offsetY };
   });
   window.addEventListener('mousemove', e => {
-    if (!drag) return;
-    const { outW, outH, scale } = S.crop;
+    if (!drag || !cropStageActive()) return;
+    const { outW, outH, scale } = CROPX.crop;
     // Display-px delta → source-image-px delta (accounting for zoom & display scale)
     const dispPerSrcX = CV.W / outW * scale;
     const dispPerSrcY = CV.H / outH * scale;
-    S.crop.offsetX = drag.ox - (e.clientX - drag.sx) / dispPerSrcX * scale;
-    S.crop.offsetY = drag.oy - (e.clientY - drag.sy) / dispPerSrcY * scale;
+    CROPX.crop.offsetX = drag.ox - (e.clientX - drag.sx) / dispPerSrcX * scale;
+    CROPX.crop.offsetY = drag.oy - (e.clientY - drag.sy) / dispPerSrcY * scale;
     clampOffset(); drawCropViewport();
   });
   window.addEventListener('mouseup', () => { drag = null; });
 
-  fresh.addEventListener('wheel', e => {
+  cc.addEventListener('wheel', e => {
+    if (!cropStageActive()) return;
     e.preventDefault();
     const step = e.deltaY > 0 ? -0.06 : 0.06;
-    zoomAt(e.clientX, e.clientY, step, fresh);
+    zoomAt(e.clientX, e.clientY, step, cc);
   }, { passive: false });
 
-  fresh.addEventListener('touchstart', e => {
+  cc.addEventListener('touchstart', e => {
+    if (!cropStageActive()) return;
     e.preventDefault();
     if (e.touches.length === 1) {
-      drag = { sx: e.touches[0].clientX, sy: e.touches[0].clientY, ox: S.crop.offsetX, oy: S.crop.offsetY };
+      drag = { sx: e.touches[0].clientX, sy: e.touches[0].clientY, ox: CROPX.crop.offsetX, oy: CROPX.crop.offsetY };
     } else if (e.touches.length === 2) {
       drag = null;
       lastPinchDist = pinchDist(e.touches);
@@ -971,52 +1489,50 @@ function bindCropEvents() {
     }
   }, { passive: false });
 
-  fresh.addEventListener('touchmove', e => {
+  cc.addEventListener('touchmove', e => {
+    if (!cropStageActive()) return;
     e.preventDefault();
     if (e.touches.length === 1 && drag) {
-      const { outW, outH, scale } = S.crop;
+      const { outW, outH, scale } = CROPX.crop;
       const dpx = CV.W / outW * scale;
       const dpy = CV.H / outH * scale;
-      S.crop.offsetX = drag.ox - (e.touches[0].clientX - drag.sx) / dpx * scale;
-      S.crop.offsetY = drag.oy - (e.touches[0].clientY - drag.sy) / dpy * scale;
+      CROPX.crop.offsetX = drag.ox - (e.touches[0].clientX - drag.sx) / dpx * scale;
+      CROPX.crop.offsetY = drag.oy - (e.touches[0].clientY - drag.sy) / dpy * scale;
       clampOffset(); drawCropViewport();
     } else if (e.touches.length === 2 && lastPinchDist) {
       const d = pinchDist(e.touches);
       const factor = d / lastPinchDist;
-      const mid = pinchMid(e.touches, fresh);
-      applyZoomFactor(factor, mid.x, mid.y, fresh);
+      const mid = pinchMid(e.touches, cc);
+      applyZoomFactor(factor, mid.x, mid.y, cc);
       lastPinchDist = d;
       clampOffset(); drawCropViewport();
     }
   }, { passive: false });
 
-  fresh.addEventListener('touchend', e => { if (e.touches.length===0) { drag=null; lastPinchDist=null; } });
-
-  // Re-draw
-  drawCropViewport();
+  cc.addEventListener('touchend', e => { if (e.touches.length===0) { drag=null; lastPinchDist=null; } });
 }
 
 function zoomAt(clientX, clientY, step, canvas) {
   const rect = canvas.getBoundingClientRect();
   const cx = clientX - rect.left; // display px within canvas
   const cy = clientY - rect.top;
-  const newScale = Math.max(1, Math.min(5, S.crop.scale + step));
-  applyZoomFactor(newScale / S.crop.scale, cx, cy, canvas);
+  const newScale = Math.max(1, Math.min(5, CROPX.crop.scale + step));
+  applyZoomFactor(newScale / CROPX.crop.scale, cx, cy, canvas);
 }
 
 function applyZoomFactor(factor, cx, cy, canvas) {
   // cx, cy in display pixels
-  const { outW, outH, scale } = S.crop;
+  const { outW, outH, scale } = CROPX.crop;
   const newScale = Math.max(1, Math.min(5, scale * factor));
   // Pivot: point under cursor should stay fixed
   // cursor in "scaled image px": cx / (CV.W/outW) + offsetX, but simpler:
   // offsetX_new = cursor_scaled_px * (1 - newScale/oldScale) + offsetX * newScale/oldScale
   const dispToScaled = outW / CV.W; // scaled-img-px per display-px
-  const cursorSX = cx * dispToScaled + S.crop.offsetX; // cursor in scaled-img-px
-  const cursorSY = cy * (outH / CV.H) + S.crop.offsetY;
-  S.crop.offsetX = cursorSX - cx * dispToScaled * (newScale / scale);
-  S.crop.offsetY = cursorSY - cy * (outH / CV.H) * (newScale / scale);
-  S.crop.scale = newScale;
+  const cursorSX = cx * dispToScaled + CROPX.crop.offsetX; // cursor in scaled-img-px
+  const cursorSY = cy * (outH / CV.H) + CROPX.crop.offsetY;
+  CROPX.crop.offsetX = cursorSX - cx * dispToScaled * (newScale / scale);
+  CROPX.crop.offsetY = cursorSY - cy * (outH / CV.H) * (newScale / scale);
+  CROPX.crop.scale = newScale;
   clampOffset(); drawCropViewport();
 }
 
@@ -1026,16 +1542,15 @@ function pinchMid(t, canvas) {
   return { x: (t[0].clientX+t[1].clientX)/2-r.left, y: (t[0].clientY+t[1].clientY)/2-r.top };
 }
 
-// ── Apply / Cancel ─────────────────────────────────────
+// ── Apply / Cancel — dispatch to the active crop context ──────────────
 window.applyCrop = () => {
-  S.cropApplied = true;
-  showStage('preview');
-  preloadIcons(() => renderOverlay());
+  if (!CROPX) return;
+  CROPX.applied = true;
+  CROPX.onApply();
 };
 
 window.cancelCrop = () => {
-  if (S.cropApplied) showStage('preview');
-  else { document.getElementById('empty-state').style.display=''; document.getElementById('crop-stage').classList.remove('active'); }
+  if (CROPX) CROPX.onCancel();
 };
 
 // ══════════════════════════════════════════
@@ -1248,14 +1763,12 @@ window.deletePreset = i => { S.presets.splice(i,1); saveSettings(); renderPreset
 // ══════════════════════════════════════════
 // EXPORT
 // ══════════════════════════════════════════
-window.exportImage = async (format) => {
-  const canvas = document.getElementById('preview');
-  if (!canvas.width) { toast('No image to export', 'error'); return; }
+// Shared canvas save pipeline: native Save As dialog with download fallback
+async function saveCanvas(canvas, format, filenameBase) {
   const mime = format === 'png' ? 'image/png' : 'image/jpeg';
   const ext  = format === 'png' ? 'png' : 'jpg';
   const quality = format === 'png' ? 1 : 0.93;
-  const base = S.imageFile ? S.imageFile.name.replace(/\.[^.]+$/, '') : 'export';
-  const filename = `${base}_overlay.${ext}`;
+  const filename = `${filenameBase}.${ext}`;
   if (window.showSaveFilePicker) {
     try {
       const handle = await window.showSaveFilePicker({
@@ -1274,6 +1787,15 @@ window.exportImage = async (format) => {
   const a = document.createElement('a');
   a.href = url; a.download = filename; a.click();
   toast(`Downloaded as ${format.toUpperCase()}`, 'success');
+}
+
+window.exportImage = async (format) => {
+  if (MODE === 'layout') { exportLayoutImage(format); return; }
+  if (MODE === 'grid')   { toast('Grid export arrives in M3', 'error'); return; }
+  const canvas = document.getElementById('preview');
+  if (!canvas.width) { toast('No image to export', 'error'); return; }
+  const base = S.imageFile ? S.imageFile.name.replace(/\.[^.]+$/, '') : 'export';
+  await saveCanvas(canvas, format, `${base}_overlay`);
 };
 
 window.exportSettings = async (format) => {
@@ -1340,6 +1862,1419 @@ window.exportSettings = async (format) => {
   toast(`Settings exported as .${ext}`, 'success');
 };
 
+
+// ══════════════════════════════════════════
+// LAYOUT MODE — state
+// ══════════════════════════════════════════
+const L = {
+  imageFile: null,
+  srcBitmap: null,      // pristine original — pre-crop bakes always start from this
+  imageBitmap: null,    // effective source: original, or original + baked border
+  cropRatio: '4:5',
+  crop: { scale: 1, offsetX: 0, offsetY: 0, outW: 0, outH: 0 },
+  cropApplied: false,
+  blur: 0, darken: 0,
+  marginPct: 5, snap: 1,
+  isBlank: false, canvasColor: '#ffffff',
+  border: { top: 0, right: 0, bottom: 0, left: 0, outside: { top: false, right: false, bottom: false, left: false }, color: '#ffffff', preCrop: false },
+  blocks: [], selectedId: null, nextId: 1,
+  loadedFonts: [], customFonts: [],
+};
+S.layout = L;
+
+// Layout viewport display metrics (display px + display-per-output scale k)
+const LV = { W: 0, H: 0, k: 1 };
+
+// ══════════════════════════════════════════
+// FONTS (curated Google Fonts, dynamic load)
+// ══════════════════════════════════════════
+const CURATED_FONTS = [
+  { f: 'Helvetica Neue', w: [400, 700], sys: true },
+  { f: 'Anton', w: [400] },
+  { f: 'Archivo Black', w: [400] },
+  { f: 'Bebas Neue', w: [400] },
+  { f: 'Six Caps', w: [400] },
+  { f: 'Abril Fatface', w: [400] },
+  { f: 'Oswald', w: [400, 500, 700] },
+  { f: 'Fjalla One', w: [400] },
+  { f: 'Archivo Narrow', w: [400, 700] },
+  { f: 'Montserrat', w: [300, 400, 700, 900] },
+  { f: 'Syne', w: [400, 700, 800] },
+  { f: 'Space Grotesk', w: [400, 500, 700] },
+  { f: 'Work Sans', w: [300, 400, 600, 800] },
+  { f: 'Inter', w: [400, 600, 800] },
+  { f: 'Unbounded', w: [400, 700, 900] },
+  { f: 'Playfair Display', w: [400, 700, 900] },
+  { f: 'DM Serif Display', w: [400] },
+  { f: 'Instrument Serif', w: [400] },
+  { f: 'Libre Baskerville', w: [400, 700] },
+  { f: 'EB Garamond', w: [400, 600, 800] },
+  { f: 'Cormorant Garamond', w: [400, 600, 700] },
+  { f: 'Lora', w: [400, 600, 700] },
+  { f: 'Crimson Text', w: [400, 600, 700] },
+  { f: 'Italiana', w: [400] },
+  { f: 'Cinzel', w: [400, 700, 900] },
+  { f: 'Marcellus', w: [400] },
+  { f: 'DM Mono', w: [300, 400, 500] },
+];
+function allFonts() { return CURATED_FONTS.concat(L.customFonts); }
+function fontSpec(family) { return allFonts().find(x => x.f === family); }
+
+const FONT_CSS_PROMISES = {};
+function loadFontCss(family) {
+  const spec = fontSpec(family);
+  if (!spec || spec.sys) return Promise.resolve(true);
+  if (FONT_CSS_PROMISES[family]) return FONT_CSS_PROMISES[family];
+  FONT_CSS_PROMISES[family] = new Promise(res => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = `https://fonts.googleapis.com/css2?family=${family.replace(/ /g, '+')}:wght@${spec.w.join(';')}&display=swap`;
+    link.onload = () => res(true);
+    link.onerror = () => res(false);
+    document.head.appendChild(link);
+  });
+  if (!L.loadedFonts.includes(family)) { L.loadedFonts.push(family); saveLayoutSettings(); }
+  return FONT_CSS_PROMISES[family];
+}
+async function ensureFontLoaded(family, weight) {
+  const spec = fontSpec(family);
+  if (!spec || spec.sys) return true;
+  const cssOk = await loadFontCss(family);
+  if (!cssOk) return false;
+  try {
+    const faces = await document.fonts.load(`${weight || 400} 16px "${family}"`);
+    return faces.length > 0;
+  } catch { return false; }
+}
+let _fontsPrimed = false;
+function primeLayoutFonts() {
+  if (_fontsPrimed) return;
+  _fontsPrimed = true;
+  const fams = new Set(L.loadedFonts);
+  L.blocks.forEach(b => { if (b.type === 'text') fams.add(b.font.family); });
+  L.customFonts.forEach(o => fams.add(o.f));   // collection list previews need the css too
+  fams.forEach(f => {
+    const sp = fontSpec(f);
+    if (sp && !sp.sys) ensureFontLoaded(f, sp.w[0]).then(() => { if (L.cropApplied) { renderLayoutBlocks(); renderCustomFontList(); } });
+  });
+}
+function populateFontSelect() {
+  let html = CURATED_FONTS.map(o => `<option value="${o.f}">${o.f}</option>`).join('');
+  if (L.customFonts.length) {
+    html += '<optgroup label="Custom">' +
+      L.customFonts.map(o => `<option value="${escapeHtml(o.f)}">${escapeHtml(o.f)}</option>`).join('') +
+      '</optgroup>';
+  }
+  document.getElementById('lp-family').innerHTML = html;
+}
+
+// ── Custom fonts: add any Google-hosted family by name or URL ──────────────
+// Accepts a family name ("Roboto Slab"), a specimen URL
+// (fonts.google.com/specimen/Roboto+Slab) or a css2 API URL.
+function parseFontInput(input) {
+  input = (input || '').trim();
+  if (!input) return null;
+  try {
+    if (input.includes('fonts.google')) {
+      const u = new URL(input);
+      if (u.pathname.includes('/specimen/')) {
+        return decodeURIComponent(u.pathname.split('/specimen/')[1].split('/')[0]).replace(/\+/g, ' ');
+      }
+      const fam = u.searchParams.get('family');
+      if (fam) return fam.split(':')[0].replace(/\+/g, ' ');
+      return null;
+    }
+  } catch { return null; }
+  return input;
+}
+
+// Discovery fetch: probe css2 (variable range → common pair → plain 400),
+// inject the returned CSS, and read the actually-available weights out of it.
+// The discovered weight list is stored, so later sessions reload the font
+// through the ordinary loadFontCss <link> path with known-valid weights.
+async function fetchGoogleFont(family) {
+  const slug = family.replace(/ /g, '+');
+  const tries = [`${slug}:ital,wght@0,100..900`, `${slug}:wght@400;700`, slug];
+  for (const t of tries) {
+    try {
+      const res = await fetch(`https://fonts.googleapis.com/css2?family=${t}&display=swap`);
+      if (!res.ok) continue;
+      const css = await res.text();
+      const st = document.createElement('style');
+      st.dataset.customFont = family;
+      st.textContent = css;
+      document.head.appendChild(st);
+      let weights = [...new Set([...css.matchAll(/font-weight:\s*(\d+)(?:\s+(\d+))?/g)].flatMap(m =>
+        m[2] ? [100, 300, 400, 500, 700, 900].filter(w => w >= +m[1] && w <= +m[2]) : [+m[1]]
+      ))].sort((a, b) => a - b);
+      if (!weights.length) weights = [400];
+      await document.fonts.load(`${weights.includes(400) ? 400 : weights[0]} 16px "${family}"`).catch(() => {});
+      return { f: family, w: weights, custom: true };
+    } catch {}
+  }
+  return null;
+}
+
+window.addCustomFont = async () => {
+  const inp = document.getElementById('lay-font-input');
+  const family = parseFontInput(inp.value);
+  if (!family) { toast('Enter a font name or Google Fonts URL', 'error'); return; }
+  if (fontSpec(family)) { toast(`${family} is already available`, 'error'); return; }
+  toast(`Loading ${family}…`);
+  const spec = await fetchGoogleFont(family);
+  if (!spec) { toast(`Couldn't find "${family}" on Google Fonts`, 'error'); return; }
+  L.customFonts.push(spec);
+  FONT_CSS_PROMISES[family] = Promise.resolve(true);   // css already injected this session
+  saveLayoutSettings();
+  populateFontSelect();
+  renderCustomFontList();
+  updatePropsPanel();
+  inp.value = '';
+  toast(`${family} added (weights: ${spec.w.join(', ')})`, 'success');
+};
+
+window.deleteCustomFont = i => {
+  L.customFonts.splice(i, 1);
+  saveLayoutSettings();
+  populateFontSelect();
+  renderCustomFontList();
+};
+
+window.useCustomFont = i => {
+  const f = L.customFonts[i];
+  const b = selBlock();
+  if (!b || b.type !== 'text') { toast('Select a text block first', 'error'); return; }
+  setBlockProp('family', f.f);
+};
+
+function renderCustomFontList() {
+  const list = document.getElementById('custom-font-list');
+  if (!L.customFonts.length) { list.innerHTML = '<div class="preset-empty">No custom fonts yet</div>'; return; }
+  // Beyond 4 fonts the row list gets tall — collapse into a select + actions
+  if (L.customFonts.length > 4) {
+    list.innerHTML =
+      '<div style="display:flex;gap:6px;align-items:center;">' +
+      '<select id="custom-font-select" style="flex:1;">' +
+      L.customFonts.map((o, i) =>
+        `<option value="${i}" style="font-family:'${o.f.replace(/'/g, '')}',sans-serif;">${escapeHtml(o.f)}</option>`).join('') +
+      '</select>' +
+      '<button class="preset-use" onclick="useCustomFont(+document.getElementById(\'custom-font-select\').value)">Use</button>' +
+      '<button class="preset-del" title="Remove from collection" onclick="deleteCustomFont(+document.getElementById(\'custom-font-select\').value)">×</button>' +
+      '</div>';
+    return;
+  }
+  list.innerHTML = L.customFonts.map((o, i) =>
+    `<div class="preset-item"><span class="preset-name" style="font-family:'${o.f.replace(/'/g, '')}',sans-serif;font-size:14px;">${escapeHtml(o.f)}</span><button class="preset-use" onclick="useCustomFont(${i})">Use</button><button class="preset-del" onclick="deleteCustomFont(${i})">×</button></div>`
+  ).join('');
+}
+
+// ══════════════════════════════════════════
+// SHARED WRAP/MEASURE — single source of truth for DOM preview & export.
+// All wrap decisions happen in full-resolution output space; the DOM only
+// scales the result, so line breaks can never diverge between the two.
+// ══════════════════════════════════════════
+const MEASURE_CTX = document.createElement('canvas').getContext('2d');
+function measureWrap(spec) {
+  const ctx = MEASURE_CTX;
+  ctx.font = `${spec.italic ? 'italic ' : ''}${spec.weight} ${spec.sizePx}px "${spec.family}", 'Helvetica Neue', Arial, sans-serif`;
+  if ('letterSpacing' in ctx) ctx.letterSpacing = ((spec.letterSpacingEm || 0) * spec.sizePx) + 'px';
+  const lines = [];
+  String(spec.text || '').split('\n').forEach(par => {
+    if (!par.length) { lines.push(''); return; }
+    const words = par.split(' ');
+    let cur = '';
+    words.forEach(w => {
+      const t = cur ? cur + ' ' + w : w;
+      if (ctx.measureText(t).width > spec.maxWpx && cur) { lines.push(cur); cur = w; } else cur = t;
+    });
+    if (cur) lines.push(cur);
+  });
+  const probe = ctx.measureText('Mg');
+  const ascent  = probe.fontBoundingBoxAscent  || spec.sizePx * 0.8;
+  const descent = probe.fontBoundingBoxDescent || spec.sizePx * 0.2;
+  const lineWidths = lines.map(l => l ? ctx.measureText(l).width : 0);
+  const lineHPx = spec.sizePx * spec.lineHeight;
+  if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  return { lines, lineWidths, ascent, descent, lineHPx, totalHPx: lines.length * lineHPx };
+}
+function textSpec(b, outW) {
+  return {
+    text: b.text, family: b.font.family, weight: b.font.weight, italic: b.font.italic,
+    sizePx: b.sizePct / 100 * outW,
+    letterSpacingEm: b.letterSpacing || 0,
+    lineHeight: b.lineHeight,
+    maxWpx: b.w / 100 * outW,
+  };
+}
+
+// ══════════════════════════════════════════
+// LAYOUT — image pipeline (shared crop stage)
+// ══════════════════════════════════════════
+async function loadLayoutImage(file) {
+  try {
+    L.imageFile = file;
+    L.isBlank = false;
+    L.srcBitmap = await createImageBitmap(file);
+    L._padL = 0; L._padT = 0;
+    rebuildLayoutSource();
+    L.cropApplied = false;
+    document.getElementById('lay-recrop-btn').disabled = false;
+    enterLayoutCropMode();
+    toast('Image loaded — set your crop', 'success');
+  } catch (e) { toast('Could not load image', 'error'); console.error('loadLayoutImage:', e); }
+}
+
+// ── Blank canvas: a generated solid-color source at the selected ratio ─────
+function blankDims() {
+  const w = 2000;
+  if (L.cropRatio === '1:1') return { w, h: w };
+  return { w, h: Math.round(w * 5 / 4) };   // 4:5; 'original' has no meaning blank → 4:5
+}
+
+function makeBlankSource() {
+  const d = blankDims();
+  const c = document.createElement('canvas');
+  c.width = d.w; c.height = d.h;
+  const x = c.getContext('2d');
+  x.fillStyle = L.canvasColor || '#ffffff';
+  x.fillRect(0, 0, d.w, d.h);
+  L.srcBitmap = c;
+  L._padL = 0; L._padT = 0;
+  rebuildLayoutSource();
+  resetCropState({ bitmap: L.imageBitmap, aspect: L.cropRatio, crop: L.crop });
+  L.cropApplied = true;
+}
+
+window.createBlankCanvas = () => {
+  L.isBlank = true;
+  L.imageFile = null;
+  makeBlankSource();
+  document.getElementById('lay-recrop-btn').disabled = false;
+  saveLayoutSettings();
+  showStage('layout');
+  renderLayoutAll();
+  toast('Blank canvas created', 'success');
+};
+
+window.setCanvasColor = v => {
+  L.canvasColor = v;
+  saveLayoutSettings();
+  if (L.isBlank && L.srcBitmap) {
+    const x = L.srcBitmap.getContext('2d');
+    x.fillStyle = v;
+    x.fillRect(0, 0, L.srcBitmap.width, L.srcBitmap.height);
+    rebuildLayoutSource();
+    if (L.cropApplied) renderLayoutAll();
+  }
+};
+
+window.enterLayoutCropMode = () => {
+  if (!L.imageBitmap) return;
+  openCrop({
+    bitmap: L.imageBitmap,
+    aspect: L.cropRatio,
+    crop: L.crop,
+    applied: L.cropApplied,
+    onApply:  () => { L.cropApplied = true; showStage('layout'); renderLayoutAll(); },
+    onCancel: () => { if (L.cropApplied) { showStage('layout'); renderLayoutAll(); } else showStage('empty'); },
+  });
+};
+
+window.setLayoutCropRatio = (ratio, btn) => {
+  L.cropRatio = ratio;
+  document.querySelectorAll('#lay-ratio-row .crop-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  saveLayoutSettings();
+  if (L.isBlank) {   // regenerate the canvas at the new ratio instead of cropping it
+    makeBlankSource();
+    if (CROPX && CROPX.crop === L.crop && currentStage === 'crop') {
+      CROPX.aspect = ratio; CROPX.bitmap = L.imageBitmap;
+      sizeCropCanvas(); resetCropTransform(); drawCropViewport();
+    } else {
+      renderLayoutAll();
+    }
+    return;
+  }
+  if (!L.imageBitmap) return;
+  if (CROPX && CROPX.crop === L.crop && currentStage === 'crop') {
+    CROPX.aspect = ratio;
+    sizeCropCanvas(); resetCropTransform(); drawCropViewport();
+  } else {
+    resetCropState({ bitmap: L.imageBitmap, aspect: ratio, crop: L.crop });
+    if (L.cropApplied) renderLayoutAll();
+  }
+};
+
+window.updateLayoutSlider = (key, el, unit, valId) => {
+  L[key] = +el.value;
+  document.getElementById(valId).textContent = el.value + unit;
+  saveLayoutSettings();
+  if (L.cropApplied) drawLayoutBg();
+};
+
+// Shared background compositor (also the future grid-cell path)
+function drawCroppedBackground(ctx, bitmap, crop, blurPx, darken, destW, destH) {
+  const { outW, outH, scale, offsetX, offsetY } = crop;
+  const srcX = offsetX / scale, srcY = offsetY / scale;
+  const srcW = outW / scale,    srcH = outH / scale;
+  ctx.drawImage(bitmap, srcX, srcY, srcW, srcH, 0, 0, destW, destH);
+  if (blurPx > 0) { ctx.filter = `blur(${blurPx}px)`; ctx.drawImage(ctx.canvas, 0, 0, destW, destH); ctx.filter = 'none'; }
+  if (darken > 0) { ctx.fillStyle = `rgba(0,0,0,${darken / 100})`; ctx.fillRect(0, 0, destW, destH); }
+}
+
+// Border widths in output px (all four derive from % of image width so the
+// matte is resolution-independent). `outside` grows the canvas; inset masks
+// the image edges in place.
+function layoutBorder() {
+  const b = L.border || {};
+  // Pre-crop borders are baked into the source bitmap — nothing post-crop to draw
+  if (b.preCrop) return { t: 0, r: 0, btm: 0, l: 0, oT: false, oR: false, oB: false, oL: false, color: b.color || '#ffffff', any: false };
+  const o = b.outside || {};
+  const u = L.crop.outW / 100;
+  const t = (b.top || 0) * u, r = (b.right || 0) * u;
+  const btm = (b.bottom || 0) * u, l = (b.left || 0) * u;
+  return {
+    t, r, btm, l,
+    oT: !!o.top, oR: !!o.right, oB: !!o.bottom, oL: !!o.left,
+    color: b.color || '#ffffff', any: t + r + btm + l > 0,
+  };
+}
+
+// ── Pre-crop bake: pad the ORIGINAL image with the border, then let the crop
+//    and every later stage treat the result as the photo. Always rebuilt from
+//    L.srcBitmap so adjustments re-bake cleanly instead of accumulating.
+function rebuildLayoutSource() {
+  if (!L.srcBitmap) return;
+  const b = L.border;
+  const prevL = L._padL || 0, prevT = L._padT || 0;
+  let l = 0, t = 0;
+  if (b.preCrop && ((b.top || 0) + (b.right || 0) + (b.bottom || 0) + (b.left || 0)) > 0) {
+    const u = L.srcBitmap.width / 100;
+    t = Math.round((b.top || 0) * u);
+    const r = Math.round((b.right || 0) * u);
+    const btm = Math.round((b.bottom || 0) * u);
+    l = Math.round((b.left || 0) * u);
+    const c = document.createElement('canvas');
+    c.width = L.srcBitmap.width + l + r;
+    c.height = L.srcBitmap.height + t + btm;
+    const x = c.getContext('2d');
+    x.fillStyle = b.color || '#ffffff';
+    x.fillRect(0, 0, c.width, c.height);
+    x.drawImage(L.srcBitmap, l, t);
+    L.imageBitmap = c;
+  } else {
+    L.imageBitmap = L.srcBitmap;
+  }
+  // Anchor the crop to the ORIGINAL content: shift offsets by the padding delta
+  L.crop.offsetX += (l - prevL) * L.crop.scale;
+  L.crop.offsetY += (t - prevT) * L.crop.scale;
+  L._padL = l; L._padT = t;
+}
+
+function refreshLayoutCropAfterSourceChange() {
+  if (!L.imageBitmap) return;
+  const d = getOutputDims(L.imageBitmap, L.cropRatio);
+  L.crop.outW = d.outW; L.crop.outH = d.outH;
+  clampOffsetFor({ bitmap: L.imageBitmap, crop: L.crop });
+  if (CROPX && CROPX.crop === L.crop && currentStage === 'crop') {
+    CROPX.bitmap = L.imageBitmap;
+    sizeCropCanvas(); drawCropViewport();
+  } else if (L.cropApplied) {
+    renderLayoutAll();
+  }
+}
+
+// Cropped image + blur + darken rendered to an exact-size canvas. Needed
+// because the blur self-draw trick assumes canvas === dest region.
+function drawImageBgCanvas(w, h, blurPx) {
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(w));
+  c.height = Math.max(1, Math.round(h));
+  drawCroppedBackground(c.getContext('2d'), L.imageBitmap, L.crop, blurPx, L.darken, c.width, c.height);
+  return c;
+}
+
+function sizeLayoutStage() {
+  if (!L.cropApplied) return;
+  const area = document.getElementById('canvas-area');
+  const aw = area.clientWidth - 48;
+  const ah = area.clientHeight - 130;
+  const { outW, outH } = L.crop;
+  const bp = layoutBorder();
+  const totalW = outW + (bp.oL ? bp.l : 0) + (bp.oR ? bp.r : 0);
+  const totalH = outH + (bp.oT ? bp.t : 0) + (bp.oB ? bp.btm : 0);
+  const ratio = totalW / totalH;
+  let vW = aw, vH = aw / ratio;
+  if (vH > ah) { vH = ah; vW = ah * ratio; }
+  LV.TW = Math.floor(vW); LV.TH = Math.floor(vH);
+  LV.k = LV.TW / totalW;
+  LV.W = outW * LV.k; LV.H = outH * LV.k;   // image-area display dims
+  const frame = document.getElementById('layout-frame');
+  frame.style.width = LV.TW + 'px'; frame.style.height = LV.TH + 'px';
+  // editor + guides track the IMAGE area — block % coords stay photo-relative
+  const ox = bp.oL ? bp.l * LV.k : 0;
+  const oy = bp.oT ? bp.t * LV.k : 0;
+  ['layout-editor', 'layout-guides'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.inset = '';
+    el.style.left = ox + 'px'; el.style.top = oy + 'px';
+    el.style.width = LV.W + 'px'; el.style.height = LV.H + 'px';
+  });
+  document.getElementById('layout-dim').textContent = `${Math.round(totalW)} × ${Math.round(totalH)}px`;
+  drawLayoutBg();
+}
+
+function drawLayoutBg() {
+  const c = document.getElementById('layout-bg');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  c.width = Math.round(LV.TW * dpr); c.height = Math.round(LV.TH * dpr);
+  c.style.width = LV.TW + 'px'; c.style.height = LV.TH + 'px';
+  const ctx = c.getContext('2d');
+  const bp = layoutBorder();
+  const k = LV.k * dpr;   // device px per output px
+  const bg = drawImageBgCanvas(L.crop.outW * k, L.crop.outH * k, L.blur * k);
+  if (!bp.any) { ctx.drawImage(bg, 0, 0); return; }
+  // Fill the whole canvas with the border color, place the image at its
+  // (possibly offset) position, then mask inset edges over the image.
+  const ox = Math.round((bp.oL ? bp.l : 0) * k);
+  const oy = Math.round((bp.oT ? bp.t : 0) * k);
+  ctx.fillStyle = bp.color;
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(bg, ox, oy);
+  const iw = bg.width, ih = bg.height;
+  if (!bp.oT && bp.t)   ctx.fillRect(ox, oy, iw, Math.round(bp.t * k));
+  if (!bp.oB && bp.btm) ctx.fillRect(ox, oy + ih - Math.round(bp.btm * k), iw, Math.round(bp.btm * k));
+  if (!bp.oL && bp.l)   ctx.fillRect(ox, oy, Math.round(bp.l * k), ih);
+  if (!bp.oR && bp.r)   ctx.fillRect(ox + iw - Math.round(bp.r * k), oy, Math.round(bp.r * k), ih);
+}
+
+window.setBorderProp = (key, val) => {
+  L.border[key] = val;
+  if (key !== 'color') document.getElementById('lay-border-' + key + '-val').textContent = val + '%';
+  saveLayoutSettings();
+  if (L.border.preCrop) { rebuildLayoutSource(); refreshLayoutCropAfterSourceChange(); }
+  else if (L.cropApplied) renderLayoutAll();
+};
+
+window.setBorderPreCrop = on => {
+  L.border.preCrop = !!on;
+  updateBorderSideButtons();
+  saveLayoutSettings();
+  rebuildLayoutSource();
+  refreshLayoutCropAfterSourceChange();
+};
+
+window.toggleBorderSide = side => {
+  L.border.outside = L.border.outside || {};
+  L.border.outside[side] = !L.border.outside[side];
+  updateBorderSideButtons();
+  saveLayoutSettings();
+  if (L.cropApplied) renderLayoutAll();   // geometry change
+};
+
+function updateBorderSideButtons() {
+  ['top', 'right', 'bottom', 'left'].forEach(s => {
+    const btn = document.getElementById('lay-border-' + s + '-mode');
+    const out = !!(L.border.outside && L.border.outside[s]);
+    btn.textContent = out ? 'OUT' : 'IN';
+    btn.classList.toggle('out', out);
+    btn.style.display = L.border.preCrop ? 'none' : '';   // IN/OUT is a post-crop concept
+  });
+}
+
+function renderLayoutAll() {
+  sizeLayoutStage();
+  renderLayoutBlocks();
+  updatePropsPanel();
+}
+
+// ══════════════════════════════════════════
+// LAYOUT — margins & snapping
+// ══════════════════════════════════════════
+// Margin is % of image width; the vertical margin converts through the aspect
+// ratio so all four margins are equal in pixels. Negative widens the range.
+function layoutMargins() {
+  const mX = L.marginPct;
+  const mY = L.marginPct * L.crop.outW / L.crop.outH;
+  return { mX, mY };
+}
+
+function blockHeightPct(b) {
+  const { outW, outH } = L.crop;
+  if (b.type === 'image') return (b.w / 100 * outW / b.aspect) / outH * 100;
+  return measureWrap(textSpec(b, outW)).totalHPx / outH * 100;
+}
+
+// Hard-clamps a proposed move to the margin box, then snaps edges/centers to
+// margin lines and stage center lines. Returns snapped position + guide lines.
+function applyMoveConstraints(b, x, y, snapAllowed) {
+  const { mX, mY } = layoutMargins();
+  const bw = b.w, bh = blockHeightPct(b);
+  x = Math.max(mX, Math.min(100 - mX - bw, x));
+  y = Math.max(mY, Math.min(100 - mY - bh, y));
+  const guides = { v: null, h: null };
+  if (L.snap && snapAllowed) {
+    const thX = 6 / LV.W * 100;   // ~6 display px, in stage %
+    const thY = 6 / LV.H * 100;
+    if (Math.abs(x - mX) < thX)                       { x = mX;               guides.v = mX; }
+    else if (Math.abs(x + bw - (100 - mX)) < thX)     { x = 100 - mX - bw;    guides.v = 100 - mX; }
+    else if (Math.abs(x + bw / 2 - 50) < thX)         { x = 50 - bw / 2;      guides.v = 50; }
+    if (Math.abs(y - mY) < thY)                       { y = mY;               guides.h = mY; }
+    else if (Math.abs(y + bh - (100 - mY)) < thY)     { y = 100 - mY - bh;    guides.h = 100 - mY; }
+    else if (Math.abs(y + bh / 2 - 50) < thY)         { y = 50 - bh / 2;      guides.h = 50; }
+  }
+  return { x, y, guides };
+}
+
+// Snap the MOVING edge of a resize to margin lines or the center line.
+// Corner-resizes on text keep the width↔font proportion by rescaling size
+// to the snapped width.
+function applyResizeSnap(d, g, snapAllowed) {
+  const guides = { v: null, h: null };
+  if (!L.snap || !snapAllowed) return { g, guides };
+  const { mX, mY } = layoutMargins();
+  const thX = 6 / LV.W * 100;
+  const thY = 6 / LV.H * 100;
+  const isCorner = d.h !== 'e' && d.h !== 'w';
+  const movingRight = d.h === 'e' || d.h === 'ne' || d.h === 'se';
+
+  // Horizontal candidate: the moving vertical edge vs margins/center
+  const edgeX = movingRight ? g.x + g.w : g.x;
+  let hCand = null;
+  const snapX = pos => {
+    if (Math.abs(pos - mX) < thX) return mX;
+    if (Math.abs(pos - (100 - mX)) < thX) return 100 - mX;
+    if (Math.abs(pos - 50) < thX) return 50;
+    return null;
+  };
+  const tx = snapX(edgeX);
+  if (tx !== null) {
+    const newW = movingRight ? tx - g.x : g.x + g.w - tx;
+    if (newW > 2) hCand = { dist: Math.abs(edgeX - tx) / thX, tx, newW };
+  }
+
+  // Vertical candidate — image blocks only: their bottom edge moves with the
+  // aspect-derived height, which is the edge that meets a margin on portrait
+  // or square images. Width follows the snapped height through the aspect.
+  let vCand = null;
+  if (isCorner && d.b.type === 'image' && d.b.aspect) {
+    const hFactor = L.crop.outW / (d.b.aspect * L.crop.outH);   // heightPct = w * hFactor
+    const bottom = d.b.y + g.w * hFactor;
+    const snapY = pos => {
+      if (Math.abs(pos - (100 - mY)) < thY) return 100 - mY;
+      if (Math.abs(pos - 50) < thY) return 50;
+      if (Math.abs(pos - mY) < thY) return mY;
+      return null;
+    };
+    const ty = snapY(bottom);
+    if (ty !== null) {
+      const newW = (ty - d.b.y) / hFactor;
+      if (newW > 2) vCand = { dist: Math.abs(bottom - ty) / thY, ty, newW };
+    }
+  }
+
+  // Apply the nearer candidate (distances normalized to their thresholds)
+  if (hCand && (!vCand || hCand.dist <= vCand.dist)) {
+    if (movingRight) g.w = hCand.newW;
+    else { g.x = g.x + g.w - hCand.newW; g.w = hCand.newW; }
+    if (isCorner && d.b.type === 'text' && d.startW) g.size = d.startSize * (g.w / d.startW);
+    guides.v = hCand.tx;
+  } else if (vCand) {
+    if (!movingRight) g.x = g.x + g.w - vCand.newW;   // keep the anchored right edge fixed
+    g.w = vCand.newW;
+    guides.h = vCand.ty;
+  }
+  return { g, guides };
+}
+
+function showSnapGuides(guides) {
+  const v = document.getElementById('snap-v');
+  const h = document.getElementById('snap-h');
+  if (guides && guides.v !== null) { v.style.left = guides.v + '%'; v.style.display = 'block'; }
+  else v.style.display = 'none';
+  if (guides && guides.h !== null) { h.style.top = guides.h + '%'; h.style.display = 'block'; }
+  else h.style.display = 'none';
+}
+
+function showMarginGuide(show) {
+  const g = document.getElementById('margin-guide');
+  if (!show || !L.cropApplied) { g.style.display = 'none'; return; }
+  const { mX, mY } = layoutMargins();
+  g.style.left = mX + '%'; g.style.right = mX + '%';
+  g.style.top = mY + '%'; g.style.bottom = mY + '%';
+  g.style.display = 'block';
+}
+
+window.setLayoutMargin = v => {
+  L.marginPct = v;
+  document.getElementById('lay-margin-val').textContent = v + '%';
+  saveLayoutSettings();
+  showMarginGuide(true);
+  clearTimeout(setLayoutMargin._t);
+  setLayoutMargin._t = setTimeout(() => showMarginGuide(false), 900);
+};
+
+// ══════════════════════════════════════════
+// LAYOUT — block engine
+// ══════════════════════════════════════════
+function newTextBlock() {
+  return {
+    id: 'b' + (L.nextId++), type: 'text',
+    x: 10, y: 42, w: 60,
+    text: 'Double-click to edit',
+    font: { family: 'Helvetica Neue', weight: 700, italic: false },
+    sizePct: 4, lineHeight: 1.25, letterSpacing: 0,
+    align: 'left', color: '#ffffff', opacity: 100,
+    shadow: { enabled: false, blur: 12, opacity: 70, x: 0, y: 2 },
+  };
+}
+
+window.addTextBlockUI = () => {
+  if (!L.cropApplied) { toast('Load & crop an image first', 'error'); return; }
+  const b = newTextBlock();
+  L.blocks.push(b);
+  L.selectedId = b.id;
+  saveLayoutSettings(); renderLayoutBlocks(); updatePropsPanel();
+};
+
+function addLogoBlock(file) {
+  if (!L.cropApplied) { toast('Load & crop an image first', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const src = reader.result;
+    const img = new Image();
+    img.onload = () => {
+      L.blocks.push({
+        id: 'b' + (L.nextId++), type: 'image',
+        x: 6, y: 6, w: 20, name: file.name,
+        aspect: (img.naturalWidth && img.naturalHeight) ? img.naturalWidth / img.naturalHeight : 1,
+        src, isSvg: (file.type || '').includes('svg'), opacity: 100,
+        filters: { invert: 0, grayscale: 0, brightness: 100, contrast: 100 },
+      });
+      L.selectedId = L.blocks[L.blocks.length - 1].id;
+      saveLayoutSettings(); renderLayoutBlocks(); updatePropsPanel();
+      toast('Image added', 'success');
+    };
+    img.onerror = () => toast('Could not read logo image', 'error');
+    img.src = src;
+  };
+  reader.readAsDataURL(file);
+}
+
+function selBlock() { return L.blocks.find(b => b.id === L.selectedId) || null; }
+
+function blockName(b) {
+  if (b.type === 'image') return (b.name || 'Image').length > 22 ? b.name.slice(0, 22) + '…' : (b.name || 'Image');
+  const t = (b.text || '').split('\n')[0].trim();
+  return t ? (t.length > 22 ? t.slice(0, 22) + '…' : t) : 'Text';
+}
+
+// ══════════════════════════════════════════
+// IMAGE COLLECTION (framedata-imagelib) — reusable logos/images, presets-style
+// ══════════════════════════════════════════
+let IMGLIB = [];
+function loadImgLib() {
+  try { IMGLIB = JSON.parse(localStorage.getItem('framedata-imagelib') || '[]'); } catch { IMGLIB = []; }
+  renderImgLib();
+}
+function saveImgLib() {
+  try { localStorage.setItem('framedata-imagelib', JSON.stringify(IMGLIB)); }
+  catch (e) { toast('Image collection is full — remove some items', 'error'); }
+}
+function renderImgLib() {
+  const list = document.getElementById('imglib-list');
+  if (!IMGLIB.length) { list.innerHTML = '<div class="preset-empty">No saved images yet</div>'; return; }
+  list.innerHTML = IMGLIB.map((o, i) =>
+    `<div class="preset-item"><img src="${o.src}" style="height:22px;max-width:44px;object-fit:contain;border-radius:2px;background:var(--surface3);flex-shrink:0;"><span class="preset-name">${escapeHtml(o.name || 'Image')}</span><button class="preset-use" onclick="useLibraryImage(${i})">Use</button><button class="preset-del" onclick="deleteLibraryImage(${i})">×</button></div>`
+  ).join('');
+}
+window.saveImageToLibrary = () => {
+  const b = selBlock();
+  if (!b || b.type !== 'image') { toast('Select an image block first', 'error'); return; }
+  if (b.src.length > 1500000) { toast('Image too large for the collection', 'error'); return; }
+  if (IMGLIB.some(o => o.src === b.src)) { toast('Already in the collection', 'error'); return; }
+  IMGLIB.push({ name: b.name || 'Image', src: b.src, aspect: b.aspect, isSvg: !!b.isSvg });
+  saveImgLib(); renderImgLib(); toast('Saved to collection', 'success');
+};
+window.useLibraryImage = i => {
+  if (!L.cropApplied) { toast('Load & crop an image first', 'error'); return; }
+  const o = IMGLIB[i];
+  L.blocks.push({
+    id: 'b' + (L.nextId++), type: 'image',
+    x: 6, y: 6, w: 20, name: o.name,
+    aspect: o.aspect, src: o.src, isSvg: o.isSvg, opacity: 100,
+    filters: { invert: 0, grayscale: 0, brightness: 100, contrast: 100 },
+  });
+  L.selectedId = L.blocks[L.blocks.length - 1].id;
+  saveLayoutSettings(); renderLayoutBlocks(); updatePropsPanel();
+};
+window.deleteLibraryImage = i => { IMGLIB.splice(i, 1); saveImgLib(); renderImgLib(); };
+
+// Same string drives CSS filter (DOM preview) and ctx.filter (export) —
+// Chromium supports identical syntax in both, so filters stay WYSIWYG.
+function imageFilterString(b) {
+  const f = b.filters || {};
+  const parts = [];
+  if (f.invert)                                    parts.push(`invert(${f.invert}%)`);
+  if (f.grayscale)                                 parts.push(`grayscale(${f.grayscale}%)`);
+  if (f.brightness !== undefined && f.brightness !== 100) parts.push(`brightness(${f.brightness}%)`);
+  if (f.contrast   !== undefined && f.contrast   !== 100) parts.push(`contrast(${f.contrast}%)`);
+  return parts.join(' ');
+}
+function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function buildTextLines(wrap, b, m, sizePx) {
+  wrap.innerHTML = '';
+  const k = LV.k;
+  m.lines.forEach(line => {
+    const ld = document.createElement('div');
+    ld.className = 'lblock-line';
+    ld.textContent = line || ' ';
+    ld.style.fontFamily = `"${b.font.family}", 'Helvetica Neue', Arial, sans-serif`;
+    ld.style.fontWeight = b.font.weight;
+    ld.style.fontStyle = b.font.italic ? 'italic' : 'normal';
+    ld.style.fontSize = (sizePx * k) + 'px';
+    ld.style.lineHeight = (m.lineHPx * k) + 'px';
+    ld.style.letterSpacing = (b.letterSpacing || 0) + 'em';
+    ld.style.textAlign = b.align;
+    wrap.appendChild(ld);
+  });
+}
+
+function renderLayoutBlocks() {
+  const ed = document.getElementById('layout-editor');
+  ed.innerHTML = '';
+  if (!L.cropApplied) { renderLayoutBlockList(); return; }
+  const outW = L.crop.outW;
+  L.blocks.forEach((b, zi) => {
+    const el = document.createElement('div');
+    el.className = 'lblock' + (L.selectedId === b.id ? ' selected' : '');
+    el.dataset.id = b.id; el.dataset.type = b.type;
+    el.style.left = b.x + '%'; el.style.top = b.y + '%'; el.style.width = b.w + '%';
+    el.style.zIndex = zi + 1;
+    el.style.opacity = (b.opacity ?? 100) / 100;
+    if (b.type === 'text') {
+      const spec = textSpec(b, outW);
+      const m = measureWrap(spec);
+      el.style.color = b.color;
+      if (b.shadow && b.shadow.enabled) {
+        const s = (outW / 1000) * LV.k;
+        el.style.textShadow = `${b.shadow.x * s}px ${b.shadow.y * s}px ${b.shadow.blur * s}px rgba(0,0,0,${b.shadow.opacity / 100})`;
+      }
+      const wrap = document.createElement('div');
+      wrap.className = 'lblock-lines';
+      el.appendChild(wrap);
+      buildTextLines(wrap, b, m, spec.sizePx);
+    } else {
+      el.style.aspectRatio = b.aspect;
+      const fs = imageFilterString(b);
+      if (b.tint && b.tint.enabled) {
+        // Colored silhouette via CSS mask — same result as the export's
+        // source-in composite: tint replaces color, alpha is preserved.
+        const div = document.createElement('div');
+        div.style.cssText =
+          `width:100%;height:100%;pointer-events:none;background-color:${b.tint.color || '#ffffff'};` +
+          `-webkit-mask-image:url("${b.src}");mask-image:url("${b.src}");` +
+          `-webkit-mask-size:100% 100%;mask-size:100% 100%;` +
+          `-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;`;
+        if (fs) div.style.filter = fs;
+        el.appendChild(div);
+      } else {
+        const img = document.createElement('img');
+        img.src = b.src; img.draggable = false;
+        if (fs) img.style.filter = fs;
+        el.appendChild(img);
+      }
+    }
+    const handles = b.type === 'text' ? ['nw','ne','sw','se','e','w'] : ['nw','ne','sw','se'];
+    handles.forEach(h => {
+      const hd = document.createElement('div');
+      hd.className = 'lblock-handle'; hd.dataset.h = h;
+      el.appendChild(hd);
+    });
+    ed.appendChild(el);
+  });
+  renderLayoutBlockList();
+}
+
+function renderLayoutBlockList() {
+  const list = document.getElementById('layout-block-list');
+  if (!L.blocks.length) { list.innerHTML = '<div class="preset-empty">No blocks yet</div>'; return; }
+  list.innerHTML = [...L.blocks].reverse().map(b =>
+    `<div class="preset-item" style="cursor:pointer;${L.selectedId === b.id ? 'border-color:var(--accent);' : ''}" onclick="selectLayoutBlock('${b.id}')"><span class="preset-name">${escapeHtml(blockName(b))}</span></div>`
+  ).join('');
+}
+window.selectLayoutBlock = id => { L.selectedId = id; renderLayoutBlocks(); updatePropsPanel(); };
+
+function updatePropsPanel() {
+  const b = selBlock();
+  const panel = document.getElementById('layout-props');
+  panel.style.display = b ? '' : 'none';
+  if (!b) return;
+  document.getElementById('layout-props-text').style.display = b.type === 'text' ? '' : 'none';
+  document.getElementById('layout-props-image').style.display = b.type === 'image' ? '' : 'none';
+  document.getElementById('lp-opacity').value = b.opacity ?? 100;
+  document.getElementById('lp-opacity-val').textContent = (b.opacity ?? 100) + '%';
+  if (b.type === 'image') {
+    const f = b.filters || { invert: 0, grayscale: 0, brightness: 100, contrast: 100 };
+    FILTER_KEYS.forEach(k => {
+      document.getElementById('lp-' + k).value = f[k];
+      document.getElementById('lp-' + k + '-val').textContent = f[k] + '%';
+    });
+    document.getElementById('lp-tint-on').checked = !!(b.tint && b.tint.enabled);
+    document.getElementById('lp-tint-color').value = (b.tint && b.tint.color) || '#ffffff';
+  }
+  if (b.type === 'text') {
+    document.getElementById('lp-family').value = b.font.family;
+    const spec = fontSpec(b.font.family) || { w: [400, 700] };
+    document.getElementById('lp-weight').innerHTML =
+      spec.w.map(w => `<option value="${w}"${w === b.font.weight ? ' selected' : ''}>${w}</option>`).join('');
+    document.getElementById('lp-color').value = b.color;
+    ['left','center','right'].forEach(a =>
+      document.getElementById('lp-align-' + a).classList.toggle('active', b.align === a));
+    document.getElementById('lp-size').value = b.sizePct;
+    document.getElementById('lp-size-val').textContent = b.sizePct.toFixed(1) + '%';
+    document.getElementById('lp-lineheight').value = Math.round(b.lineHeight * 100);
+    document.getElementById('lp-lineheight-val').textContent = Math.round(b.lineHeight * 100) + '%';
+    const ls = Math.round((b.letterSpacing || 0) * 200) / 2;   // em → % with 0.5 steps
+    document.getElementById('lp-letterspacing').value = ls;
+    document.getElementById('lp-letterspacing-val').textContent = ls + '%';
+    const sh = b.shadow || { enabled: false, blur: 12, opacity: 70, x: 0, y: 2 };
+    document.getElementById('lp-shadow-on').checked = !!sh.enabled;
+    const sc = document.getElementById('lp-shadow-controls');
+    sc.style.opacity = sh.enabled ? '1' : '0.35';
+    sc.style.pointerEvents = sh.enabled ? 'all' : 'none';
+    document.getElementById('lp-shadow-blur').value = sh.blur;
+    document.getElementById('lp-shadow-blur-val').textContent = sh.blur + 'px';
+    document.getElementById('lp-shadow-opacity').value = sh.opacity;
+    document.getElementById('lp-shadow-opacity-val').textContent = sh.opacity + '%';
+    document.getElementById('lp-shadow-x').value = sh.x;
+    document.getElementById('lp-shadow-x-val').textContent = sh.x + 'px';
+    document.getElementById('lp-shadow-y').value = sh.y;
+    document.getElementById('lp-shadow-y-val').textContent = sh.y + 'px';
+  }
+}
+
+const FILTER_KEYS = ['invert', 'grayscale', 'brightness', 'contrast'];
+const SHADOW_KEYS = { shadowEnabled: 'enabled', shadowBlur: 'blur', shadowOpacity: 'opacity', shadowX: 'x', shadowY: 'y' };
+
+window.setBlockProp = (key, val) => {
+  const b = selBlock();
+  if (!b) return;
+  if (key in SHADOW_KEYS) {
+    b.shadow = b.shadow || { enabled: false, blur: 12, opacity: 70, x: 0, y: 2 };
+    b.shadow[SHADOW_KEYS[key]] = key === 'shadowEnabled' ? !!val : val;
+    updatePropsPanel();
+    saveLayoutSettings();
+    renderLayoutBlocks();
+    return;
+  }
+  if (FILTER_KEYS.includes(key) || key === 'tintEnabled' || key === 'tintColor') {
+    if (key === 'tintEnabled' || key === 'tintColor') {
+      b.tint = b.tint || { enabled: false, color: '#ffffff' };
+      if (key === 'tintEnabled') b.tint.enabled = !!val; else b.tint.color = val;
+    } else {
+      b.filters = b.filters || { invert: 0, grayscale: 0, brightness: 100, contrast: 100 };
+      b.filters[key] = val;
+    }
+    updatePropsPanel();
+    saveLayoutSettings();
+    renderLayoutBlocks();
+    return;
+  }
+  if (key === 'family') {
+    b.font.family = val;
+    const spec = fontSpec(val) || { w: [400] };
+    if (!spec.w.includes(b.font.weight)) b.font.weight = spec.w.includes(700) ? 700 : spec.w[0];
+    ensureFontLoaded(b.font.family, b.font.weight).then(ok => {
+      if (!ok) toast(`Couldn't load ${val} — using fallback`, 'error');
+      renderLayoutBlocks();
+    });
+  } else if (key === 'weight') {
+    b.font.weight = val;
+    ensureFontLoaded(b.font.family, val).then(() => renderLayoutBlocks());
+  } else if (key === 'lineHeight') {
+    b.lineHeight = val;
+  } else if (key === 'letterSpacing') {
+    b.letterSpacing = val;
+  } else {
+    b[key] = val;
+  }
+  updatePropsPanel();
+  saveLayoutSettings();
+  renderLayoutBlocks();
+};
+
+window.blockOp = op => {
+  const i = L.blocks.findIndex(b => b.id === L.selectedId);
+  if (i < 0) return;
+  const b = L.blocks[i];
+  if (op === 'del') { L.blocks.splice(i, 1); L.selectedId = null; }
+  else if (op === 'dup') {
+    const c = JSON.parse(JSON.stringify(b));
+    c.id = 'b' + (L.nextId++);
+    c.x = Math.min(90, c.x + 2); c.y = Math.min(94, c.y + 2);
+    L.blocks.push(c); L.selectedId = c.id;
+  }
+  else if (op === 'front') { L.blocks.splice(i, 1); L.blocks.push(b); }
+  else if (op === 'back')  { L.blocks.splice(i, 1); L.blocks.unshift(b); }
+  saveLayoutSettings(); renderLayoutBlocks(); updatePropsPanel();
+};
+
+// ── Inline text editing (overlay textarea; commit re-wraps via measureWrap) ──
+let EDITING = null;
+function startInlineEdit(b) {
+  const ed = document.getElementById('layout-editor');
+  const el = ed.querySelector(`.lblock[data-id="${b.id}"]`);
+  if (!el || EDITING) return;
+  L.selectedId = b.id;
+  el.style.visibility = 'hidden';
+  const spec = textSpec(b, L.crop.outW);
+  const m = measureWrap(spec);
+  const ta = document.createElement('textarea');
+  ta.className = 'lblock-edit';
+  ta.value = b.text;
+  ta.style.left = b.x + '%'; ta.style.top = b.y + '%'; ta.style.width = b.w + '%';
+  ta.style.height = (Math.max(m.totalHPx, m.lineHPx) * LV.k + 24) + 'px';
+  ta.style.fontFamily = `"${b.font.family}", 'Helvetica Neue', Arial, sans-serif`;
+  ta.style.fontWeight = b.font.weight;
+  ta.style.fontStyle = b.font.italic ? 'italic' : 'normal';
+  ta.style.fontSize = (spec.sizePx * LV.k) + 'px';
+  ta.style.lineHeight = (m.lineHPx * LV.k) + 'px';
+  ta.style.letterSpacing = (b.letterSpacing || 0) + 'em';
+  ta.style.textAlign = b.align;
+  ta.style.color = b.color;
+  ed.appendChild(ta);
+  EDITING = b.id;
+  ta.focus(); ta.select();
+  const commit = () => {
+    if (EDITING !== b.id) return;
+    EDITING = null;
+    b.text = ta.value;
+    ta.remove();
+    saveLayoutSettings();
+    renderLayoutBlocks();
+  };
+  ta.addEventListener('blur', commit);
+  ta.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Escape') ta.blur();
+  });
+}
+
+// ── Pointer state machine: transform-only during drag, commit % on release ──
+let LDRAG = null;
+
+function calcResize(d, dx) {
+  const startWpx = d.startW / 100 * d.frameW;
+  let x = d.startX, w = d.startW, size = d.startSize;
+  if (d.h === 'e') {
+    w = Math.max(4, d.startW + dx / d.frameW * 100);
+  } else if (d.h === 'w') {
+    w = Math.max(4, d.startW - dx / d.frameW * 100);
+    x = d.startX + (d.startW - w);
+  } else { // corners: uniform scale — width and font size together, breaks preserved
+    const sign = (d.h === 'ne' || d.h === 'se') ? 1 : -1;
+    let f = Math.max(0.1, (startWpx + sign * dx) / startWpx);
+    w = d.startW * f;
+    if (w < 4) { w = 4; f = w / d.startW; }
+    if (sign < 0) x = d.startX + (d.startW - w);
+    size = d.startSize * f;
+  }
+  return { x, w, size };
+}
+
+function reflowTextEl(el, b, wPct) {
+  const spec = textSpec(b, L.crop.outW);
+  spec.maxWpx = wPct / 100 * L.crop.outW;
+  const m = measureWrap(spec);
+  buildTextLines(el.querySelector('.lblock-lines'), b, m, spec.sizePx);
+}
+
+function initLayoutEditor() {
+  const ed = document.getElementById('layout-editor');
+  // Manual double-press detection: pointerup re-renders replace DOM nodes,
+  // which stops the browser from ever synthesizing a native dblclick.
+  let lastDown = { id: null, t: 0 };
+
+  ed.addEventListener('pointerdown', e => {
+    if (EDITING || e.target.closest('.lblock-edit')) return;
+    const handle = e.target.closest('.lblock-handle');
+    const blockEl = e.target.closest('.lblock');
+    if (!blockEl) {
+      if (L.selectedId) { L.selectedId = null; renderLayoutBlocks(); updatePropsPanel(); }
+      lastDown = { id: null, t: 0 };
+      return;
+    }
+    const b = L.blocks.find(x => x.id === blockEl.dataset.id);
+    if (!b) return;
+    const now = performance.now();
+    if (!handle && b.type === 'text' && lastDown.id === b.id && now - lastDown.t < 400) {
+      lastDown = { id: null, t: 0 };
+      e.preventDefault();   // stop the mousedown default from stealing focus off the textarea
+      startInlineEdit(b);
+      return;
+    }
+    lastDown = { id: b.id, t: now };
+    if (L.selectedId !== b.id) { L.selectedId = b.id; renderLayoutBlocks(); updatePropsPanel(); }
+    const el = ed.querySelector(`.lblock[data-id="${b.id}"]`); // re-query: render may have replaced the node
+    e.preventDefault();
+    try { ed.setPointerCapture(e.pointerId); } catch {}
+    LDRAG = {
+      mode: handle ? 'resize' : 'move',
+      h: handle ? handle.dataset.h : null,
+      b, el, moved: false,
+      frameW: ed.clientWidth, frameH: ed.clientHeight,
+      sx: e.clientX, sy: e.clientY,
+      startX: b.x, startY: b.y, startW: b.w, startSize: b.sizePct || 0,
+    };
+    if (!handle) el.classList.add('dragging');
+    showMarginGuide(true);   // margin box visible for moves AND resizes
+  });
+
+  ed.addEventListener('pointermove', e => {
+    if (!LDRAG) return;
+    const d = LDRAG, dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+    if (Math.abs(dx) + Math.abs(dy) > 2) d.moved = true;
+    if (d.mode === 'move') {
+      const snap = applyMoveConstraints(d.b,
+        d.startX + dx / d.frameW * 100,
+        d.startY + dy / d.frameH * 100, !e.altKey);
+      d.lastPos = snap;
+      d.el.style.transform =
+        `translate(${(snap.x - d.startX) / 100 * d.frameW}px, ${(snap.y - d.startY) / 100 * d.frameH}px)`;
+      showSnapGuides(snap.guides);
+    } else {
+      let g = calcResize(d, dx);
+      const sr = applyResizeSnap(d, g, !e.altKey);
+      g = sr.g;
+      d.lastResize = g;
+      showSnapGuides(sr.guides);
+      d.el.style.left = g.x + '%';
+      d.el.style.width = g.w + '%';
+      if (d.b.type === 'text') {
+        if (d.h === 'e' || d.h === 'w') {
+          reflowTextEl(d.el, d.b, g.w);           // live re-wrap at new width
+        } else {
+          const sizePx = g.size / 100 * L.crop.outW * LV.k;
+          d.el.querySelectorAll('.lblock-line').forEach(ld => {
+            ld.style.fontSize = sizePx + 'px';
+            ld.style.lineHeight = (sizePx * d.b.lineHeight) + 'px';
+          });
+        }
+      }
+    }
+  });
+
+  const finish = e => {
+    if (!LDRAG) return;
+    const d = LDRAG; LDRAG = null;
+    showSnapGuides(null); showMarginGuide(false);
+    if (!d.moved) { d.el.classList.remove('dragging'); return; }   // plain click: keep node alive for double-press
+    const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+    if (d.mode === 'move') {
+      const snap = d.lastPos || applyMoveConstraints(d.b,
+        d.startX + dx / d.frameW * 100,
+        d.startY + dy / d.frameH * 100, !e.altKey);
+      d.b.x = snap.x; d.b.y = snap.y;
+    } else {
+      const g = d.lastResize || calcResize(d, dx);
+      d.b.x = g.x; d.b.w = g.w;
+      if (d.b.type === 'text' && g.size) d.b.sizePct = g.size;
+    }
+    saveLayoutSettings();
+    renderLayoutBlocks();
+    updatePropsPanel();
+  };
+  ed.addEventListener('pointerup', finish);
+  ed.addEventListener('pointercancel', () => {
+    if (LDRAG) { LDRAG = null; showSnapGuides(null); showMarginGuide(false); renderLayoutBlocks(); }
+  });
+
+  ed.addEventListener('dblclick', e => {
+    const blockEl = e.target.closest('.lblock');
+    if (!blockEl) return;
+    const b = L.blocks.find(x => x.id === blockEl.dataset.id);
+    if (b && b.type === 'text') startInlineEdit(b);
+  });
+}
+
+// ══════════════════════════════════════════
+// LAYOUT — export (full-res canvas, same wrap math as the DOM preview)
+// ══════════════════════════════════════════
+const BLOCK_IMG_CACHE = {};
+function getBlockImage(b) {
+  const cached = BLOCK_IMG_CACHE[b.id];
+  if (cached && cached.src === b.src) return Promise.resolve(cached);
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => { BLOCK_IMG_CACHE[b.id] = img; res(img); };
+    img.onerror = rej;
+    img.src = b.src;
+  });
+}
+
+async function exportLayoutImage(format) {
+  if (!L.cropApplied || !L.imageBitmap) { toast('Load & crop an image first', 'error'); return; }
+  // Gate on every used webfont being ready; fall back with a warning, never block
+  const used = [...new Set(L.blocks.filter(b => b.type === 'text').map(b => b.font.family + '|' + b.font.weight))];
+  for (const key of used) {
+    const [fam, w] = key.split('|');
+    const sp = fontSpec(fam);
+    if (sp && !sp.sys) {
+      const ok = await ensureFontLoaded(fam, +w);
+      if (!ok) toast(`${fam} unavailable — exporting with fallback`, 'error');
+    }
+  }
+  const { outW, outH } = L.crop;
+  const bp = layoutBorder();
+  const totalW = Math.round(outW + (bp.oL ? bp.l : 0) + (bp.oR ? bp.r : 0));
+  const totalH = Math.round(outH + (bp.oT ? bp.t : 0) + (bp.oB ? bp.btm : 0));
+  const ox = bp.oL ? Math.round(bp.l) : 0;
+  const oy = bp.oT ? Math.round(bp.t) : 0;
+  const c = document.createElement('canvas');
+  c.width = totalW; c.height = totalH;
+  const ctx = c.getContext('2d');
+  if (bp.any) { ctx.fillStyle = bp.color; ctx.fillRect(0, 0, totalW, totalH); }
+  ctx.drawImage(drawImageBgCanvas(outW, outH, L.blur), ox, oy);
+  if (bp.any) {
+    ctx.fillStyle = bp.color;
+    if (!bp.oT && bp.t)   ctx.fillRect(ox, oy, outW, Math.round(bp.t));
+    if (!bp.oB && bp.btm) ctx.fillRect(ox, oy + outH - Math.round(bp.btm), outW, Math.round(bp.btm));
+    if (!bp.oL && bp.l)   ctx.fillRect(ox, oy, Math.round(bp.l), outH);
+    if (!bp.oR && bp.r)   ctx.fillRect(ox + outW - Math.round(bp.r), oy, Math.round(bp.r), outH);
+  }
+  ctx.save();
+  ctx.translate(ox, oy);   // blocks stay photo-relative
+  for (const b of L.blocks) {
+    ctx.save();
+    ctx.globalAlpha = (b.opacity ?? 100) / 100;
+    if (b.type === 'text') {
+      const spec = textSpec(b, outW);
+      const m = measureWrap(spec);
+      if (b.shadow && b.shadow.enabled) {
+        const s = outW / 1000;
+        ctx.shadowColor = `rgba(0,0,0,${b.shadow.opacity / 100})`;
+        ctx.shadowBlur = b.shadow.blur * s;
+        ctx.shadowOffsetX = b.shadow.x * s;
+        ctx.shadowOffsetY = b.shadow.y * s;
+      }
+      ctx.fillStyle = b.color;
+      ctx.font = `${b.font.italic ? 'italic ' : ''}${b.font.weight} ${spec.sizePx}px "${b.font.family}", 'Helvetica Neue', Arial, sans-serif`;
+      if ('letterSpacing' in ctx) ctx.letterSpacing = ((b.letterSpacing || 0) * spec.sizePx) + 'px';
+      ctx.textBaseline = 'alphabetic';
+      const xPx = b.x / 100 * outW, yPx = b.y / 100 * outH, wPx = b.w / 100 * outW;
+      m.lines.forEach((line, i) => {
+        if (!line) return;
+        let lx = xPx;
+        if (b.align === 'center') lx = xPx + (wPx - m.lineWidths[i]) / 2;
+        else if (b.align === 'right') lx = xPx + wPx - m.lineWidths[i];
+        // Mimic the CSS line-box model: half-leading + ascent
+        const by = yPx + i * m.lineHPx + (m.lineHPx - (m.ascent + m.descent)) / 2 + m.ascent;
+        ctx.fillText(line, lx, by);
+      });
+      if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+    } else {
+      try {
+        const img = await getBlockImage(b);
+        const wPx = b.w / 100 * outW, hPx = wPx / b.aspect;
+        let src = img;
+        if (b.tint && b.tint.enabled) {
+          // source-in tint at export resolution: color replaced, alpha kept
+          const off = document.createElement('canvas');
+          off.width = Math.max(1, Math.round(wPx));
+          off.height = Math.max(1, Math.round(hPx));
+          const octx = off.getContext('2d');
+          octx.drawImage(img, 0, 0, off.width, off.height);
+          octx.globalCompositeOperation = 'source-in';
+          octx.fillStyle = b.tint.color || '#ffffff';
+          octx.fillRect(0, 0, off.width, off.height);
+          src = off;
+        }
+        const fs = imageFilterString(b);
+        if (fs) ctx.filter = fs;
+        ctx.drawImage(src, b.x / 100 * outW, b.y / 100 * outH, wPx, hPx);
+        ctx.filter = 'none';
+      } catch { toast('An image block failed to render', 'error'); }
+    }
+    ctx.restore();
+  }
+  ctx.restore();   // undo photo-area translate
+  const base = L.imageFile ? L.imageFile.name.replace(/\.[^.]+$/, '') : 'layout';
+  await saveCanvas(c, format, `${base}_layout`);
+}
+
+// ══════════════════════════════════════════
+// LAYOUT — persistence (framedata-layout, debounced)
+// ══════════════════════════════════════════
+let _layoutSaveT = null;
+function saveLayoutSettings() {
+  clearTimeout(_layoutSaveT);
+  _layoutSaveT = setTimeout(() => {
+    try {
+      let skipped = 0;
+      const blocks = L.blocks.filter(b => {
+        if (b.type === 'image' && b.src && b.src.length > 1500000) { skipped++; return false; }
+        return true;
+      });
+      localStorage.setItem('framedata-layout', JSON.stringify({
+        cropRatio: L.cropRatio, blur: L.blur, darken: L.darken,
+        marginPct: L.marginPct, snap: L.snap, border: L.border,
+        isBlank: L.isBlank, canvasColor: L.canvasColor,
+        loadedFonts: L.loadedFonts, customFonts: L.customFonts,
+        blocks, nextId: L.nextId,
+      }));
+      if (skipped && !saveLayoutSettings._warned) {
+        saveLayoutSettings._warned = true;
+        toast(`${skipped} large logo${skipped > 1 ? 's' : ''} not persisted (size cap)`, 'error');
+      }
+    } catch (e) { console.warn('layout save failed:', e); }
+  }, 300);
+}
+
+function loadLayoutStorage() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('framedata-layout') || '{}');
+    if (saved.cropRatio) L.cropRatio = saved.cropRatio;
+    if (saved.blur !== undefined) L.blur = saved.blur;
+    if (saved.darken !== undefined) L.darken = saved.darken;
+    if (Array.isArray(saved.loadedFonts)) L.loadedFonts = saved.loadedFonts;
+    if (Array.isArray(saved.blocks)) L.blocks = saved.blocks;
+    if (saved.nextId) L.nextId = saved.nextId;
+    if (saved.marginPct !== undefined) L.marginPct = saved.marginPct;
+    if (saved.snap !== undefined) L.snap = saved.snap;
+    if (Array.isArray(saved.customFonts)) L.customFonts = saved.customFonts;
+    if (saved.border) {
+      L.border = Object.assign({ top: 0, right: 0, bottom: 0, left: 0, color: '#ffffff' }, saved.border);
+      if (typeof L.border.outside !== 'object' || !L.border.outside) {
+        const v = !!saved.border.outside;   // migrate the old single-boolean form
+        L.border.outside = { top: v, right: v, bottom: v, left: v };
+      }
+    }
+    ['top', 'right', 'bottom', 'left'].forEach(k => {
+      document.getElementById('lay-border-' + k).value = L.border[k];
+      document.getElementById('lay-border-' + k + '-val').textContent = L.border[k] + '%';
+    });
+    if (saved.isBlank !== undefined) L.isBlank = !!saved.isBlank;
+    if (saved.canvasColor) L.canvasColor = saved.canvasColor;
+    document.getElementById('lay-canvas-color').value = L.canvasColor;
+    document.getElementById('lay-border-precrop').checked = !!L.border.preCrop;
+    updateBorderSideButtons();
+    document.getElementById('lay-border-color').value = L.border.color;
+    document.getElementById('lay-blur-slider').value = L.blur;
+    document.getElementById('lay-blur-val').textContent = L.blur + 'px';
+    document.getElementById('lay-darken-slider').value = L.darken;
+    document.getElementById('lay-darken-val').textContent = L.darken + '%';
+    document.getElementById('lay-margin').value = L.marginPct;
+    document.getElementById('lay-margin-val').textContent = L.marginPct + '%';
+    document.getElementById('lay-snap').checked = !!L.snap;
+    document.querySelectorAll('#lay-ratio-row .crop-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.ratio === L.cropRatio));
+  } catch (e) { console.warn('loadLayoutStorage error:', e); }
+}
+
+function initLayoutMode() {
+  populateFontSelect();
+  const zone = document.getElementById('lay-drop-zone');
+  const fi = document.getElementById('lay-file-input');
+  fi.addEventListener('change', e => { if (e.target.files[0]) loadLayoutImage(e.target.files[0]); });
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('dragover');
+    if (e.dataTransfer.files[0]) loadLayoutImage(e.dataTransfer.files[0]);
+  });
+  document.getElementById('lay-logo-input').addEventListener('change', e => {
+    if (e.target.files[0]) addLogoBlock(e.target.files[0]);
+    e.target.value = '';
+  });
+  window.addEventListener('keydown', e => {
+    if (MODE !== 'layout' || EDITING) return;
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+    if ((e.key === 'Delete' || e.key === 'Backspace') && L.selectedId) { e.preventDefault(); blockOp('del'); }
+    else if (e.key === 'Escape' && L.selectedId) { L.selectedId = null; renderLayoutBlocks(); updatePropsPanel(); }
+  });
+  initLayoutEditor();
+  loadLayoutStorage();
+  populateFontSelect();      // re-populate after custom fonts restore
+  renderCustomFontList();
+  loadImgLib();
+  if (L.isBlank) {           // blank-canvas compositions restore fully on reload
+    makeBlankSource();
+    document.getElementById('lay-recrop-btn').disabled = false;
+    stageByMode.layout = 'layout';
+  }
+}
+
+// ══════════════════════════════════════════
+// GRID MODE — M0 mock (layout picker + placeholder cells)
+// ══════════════════════════════════════════
+// Each entry: array of variants; each variant: cells-per-row spec.
+// Variant 0 = default; variants only for counts 2–3 (horizontal / vertical).
+const GRID_SPECS = {
+  1: [[1]],
+  2: [[2], [1,1]],
+  3: [[3], [1,1,1]],
+  4: [[2,2]],
+  5: [[2,3]],
+  6: [[3,3]],
+  7: [[3,4]],
+  8: [[4,4]],
+  9: [[3,3,3]],
+  10: [[3,3,4]],
+  11: [[3,4,4]],
+  12: [[4,4,4]],
+};
+const G0 = { ratio: '1:1', count: 4, variant: 0, gutter: 6 };
+
+window.setGridCount = n => {
+  G0.count = n;
+  if (!GRID_SPECS[n][G0.variant]) G0.variant = 0;
+  document.querySelectorAll('#grid-count-picker .crop-btn').forEach(b => b.classList.toggle('active', +b.textContent === n));
+  document.getElementById('grid-variant-section').style.display = GRID_SPECS[n].length > 1 ? '' : 'none';
+  renderGridMock();
+};
+window.setGridVariant = v => {
+  G0.variant = v;
+  document.getElementById('grid-var-h').classList.toggle('active', v === 0);
+  document.getElementById('grid-var-v').classList.toggle('active', v === 1);
+  renderGridMock();
+};
+window.setGridRatio = r => {
+  G0.ratio = r;
+  document.getElementById('grid-ratio-11').classList.toggle('active', r === '1:1');
+  document.getElementById('grid-ratio-45').classList.toggle('active', r === '4:5');
+  renderGridMock();
+};
+window.setGridGutter = v => {
+  G0.gutter = v;
+  document.getElementById('grid-gutter-val').textContent = v + 'px';
+  renderGridMock();
+};
+
+function renderGridMock() {
+  const frame = document.getElementById('grid-frame');
+  const rows = GRID_SPECS[G0.count][G0.variant] || GRID_SPECS[G0.count][0];
+  frame.style.aspectRatio = G0.ratio === '1:1' ? '1 / 1' : '4 / 5';
+  frame.style.gap = G0.gutter + 'px';
+  frame.style.padding = G0.gutter + 'px';
+  let i = 1;
+  frame.innerHTML = rows.map(cols =>
+    `<div class="grid-row" style="gap:${G0.gutter}px">` +
+    Array.from({ length: cols }, () => `<div class="grid-cell">${i++}</div>`).join('') +
+    `</div>`
+  ).join('');
+}
+
+function initGridPicker() {
+  const picker = document.getElementById('grid-count-picker');
+  picker.innerHTML = Array.from({ length: 12 }, (_, k) =>
+    `<button class="crop-btn${k + 1 === G0.count ? ' active' : ''}" onclick="setGridCount(${k + 1})">${k + 1}</button>`
+  ).join('');
+  document.getElementById('grid-variant-section').style.display = GRID_SPECS[G0.count].length > 1 ? '' : 'none';
+  renderGridMock();
+}
 
 // ══════════════════════════════════════════
 // TOAST
