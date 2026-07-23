@@ -777,17 +777,17 @@ document.addEventListener('DOMContentLoaded', () => {
     renderOverlay();
   });
   window.addEventListener('keydown', e => {
-    if ((e.key==='r'||e.key==='R') && document.getElementById('crop-stage').classList.contains('active')) {
+    if ((e.key==='r'||e.key==='R') && cropStageActive()) {
       resetCropTransform(); drawCropViewport();
     }
   });
   window.addEventListener('resize', () => {
-    if (document.getElementById('crop-stage').classList.contains('active') && S.imageBitmap) {
+    if (cropStageActive()) {
       sizeCropCanvas(); drawCropViewport();
     }
   });
 
-  // M0 mode-shell mocks
+  initCropEvents();
   renderLayoutBlocks();
   initLayoutEditor();
   initGridPicker();
@@ -863,7 +863,7 @@ function loadFromStorage() {
     // Crop ratio
     if (saved.cropRatio) {
       S.cropRatio = saved.cropRatio;
-      document.querySelectorAll('.crop-btn').forEach(b => {
+      document.querySelectorAll('#tab-image .crop-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.ratio === S.cropRatio ||
           (S.cropRatio === '4:5' && b.textContent.includes('4')) ||
           (S.cropRatio === '1:1' && b.textContent.includes('1 : 1')) ||
@@ -1021,34 +1021,61 @@ async function loadImage(file) {
 // ══════════════════════════════════════════
 window.setCropRatio = (ratio, btn) => {
   S.cropRatio = ratio;
-  document.querySelectorAll('.crop-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#tab-image .crop-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   saveSettings();
-  if (S.imageBitmap) { sizeCropCanvas(); resetCropTransform(); drawCropViewport(); }
+  if (!S.imageBitmap) return;
+  if (CROPX && CROPX.crop === S.crop && currentStage === 'crop') {
+    CROPX.aspect = ratio;
+    sizeCropCanvas(); resetCropTransform(); drawCropViewport();
+  } else {
+    resetCropState({ bitmap: S.imageBitmap, aspect: ratio, crop: S.crop });
+  }
 };
 
-function getOutputDims() {
-  const { width: iw, height: ih } = S.imageBitmap;
-  if (S.cropRatio === '1:1') { const s = Math.min(iw,ih); return { outW:s, outH:s }; }
-  if (S.cropRatio === '4:5') {
-    let w=iw, h=Math.round(iw*5/4);
-    if (h>ih) { h=ih; w=Math.round(ih*4/5); }
-    return { outW:w, outH:h };
-  }
-  return { outW:iw, outH:ih };
+// aspect: '4:5' | '1:1' | 'original' | {w, h} (largest inscribed rect at that ratio)
+function getOutputDims(bitmap, aspect) {
+  const { width: iw, height: ih } = bitmap;
+  if (aspect === 'original' || !aspect) return { outW: iw, outH: ih };
+  let ar;
+  if (aspect === '1:1') ar = 1;
+  else if (aspect === '4:5') ar = 4 / 5;
+  else ar = aspect.w / aspect.h;
+  let w = iw, h = Math.round(iw / ar);
+  if (h > ih) { h = ih; w = Math.round(ih * ar); }
+  return { outW: w, outH: h };
 }
 
 // ══════════════════════════════════════════
-// CROP STAGE
+// CROP STAGE (parameterized — shared by EXIF / Layout / Grid)
 // ══════════════════════════════════════════
-window.enterCropMode = () => {
-  if (!S.imageBitmap) return;
+// Active crop context: { bitmap, aspect, crop (live caller-owned ref),
+//                        applied, onApply, onCancel }
+let CROPX = null;
+
+function openCrop(ctxObj) {
+  CROPX = ctxObj;
   showStage('crop');
   sizeCropCanvas();
   // Only reset transform when entering fresh (not when re-entering after apply)
-  if (!S.cropApplied) resetCropTransform();
+  if (!ctxObj.applied) resetCropTransform();
   drawCropViewport();
-  bindCropEvents();
+}
+
+function cropStageActive() {
+  return !!CROPX && document.getElementById('crop-stage').classList.contains('active');
+}
+
+window.enterCropMode = () => {
+  if (!S.imageBitmap) return;
+  openCrop({
+    bitmap: S.imageBitmap,
+    aspect: S.cropRatio,
+    crop: S.crop,
+    applied: S.cropApplied,
+    onApply:  () => { S.cropApplied = true; showStage('preview'); preloadIcons(() => renderOverlay()); },
+    onCancel: () => { S.cropApplied ? showStage('preview') : showStage('empty'); },
+  });
 };
 
 function showStage(name) {
@@ -1064,8 +1091,8 @@ function sizeCropCanvas() {
   const area = document.getElementById('canvas-area');
   const aw = area.clientWidth - 48;
   const ah = area.clientHeight - 110;
-  const { outW, outH } = getOutputDims();
-  S.crop.outW = outW; S.crop.outH = outH;
+  const { outW, outH } = getOutputDims(CROPX.bitmap, CROPX.aspect);
+  CROPX.crop.outW = outW; CROPX.crop.outH = outH;
   const ratio = outW / outH;
   let vW = aw, vH = aw / ratio;
   if (vH > ah) { vH = ah; vW = ah * ratio; }
@@ -1078,37 +1105,40 @@ function sizeCropCanvas() {
   });
 }
 
-function resetCropTransform() {
-  const { width: iw, height: ih } = S.imageBitmap;
-  const { outW, outH } = getOutputDims();
-  S.crop.outW = outW; S.crop.outH = outH;
+// Pure reset on any crop context (also used for state-only resets outside the stage)
+function resetCropState(cx) {
+  const { width: iw, height: ih } = cx.bitmap;
+  const { outW, outH } = getOutputDims(cx.bitmap, cx.aspect);
+  cx.crop.outW = outW; cx.crop.outH = outH;
   // Scale = 1 means image fits exactly to fill the output frame
-  S.crop.scale = 1;
+  cx.crop.scale = 1;
   // Center the crop within the image
-  S.crop.offsetX = (iw - outW) / 2;
-  S.crop.offsetY = (ih - outH) / 2;
-  clampOffset();
+  cx.crop.offsetX = (iw - outW) / 2;
+  cx.crop.offsetY = (ih - outH) / 2;
+  clampOffsetFor(cx);
 }
+function resetCropTransform() { resetCropState(CROPX); }
 
-function clampOffset() {
-  const { width: iw, height: ih } = S.imageBitmap;
-  const { outW, outH, scale } = S.crop;
+function clampOffsetFor(cx) {
+  const { width: iw, height: ih } = cx.bitmap;
+  const { outW, outH, scale } = cx.crop;
   // At scale > 1, effective image size is bigger
   const effW = iw * scale;
   const effH = ih * scale;
   // offsetX/Y are in the scaled image's pixel space
-  S.crop.offsetX = Math.max(0, Math.min(S.crop.offsetX, effW - outW));
-  S.crop.offsetY = Math.max(0, Math.min(S.crop.offsetY, effH - outH));
+  cx.crop.offsetX = Math.max(0, Math.min(cx.crop.offsetX, effW - outW));
+  cx.crop.offsetY = Math.max(0, Math.min(cx.crop.offsetY, effH - outH));
 }
+function clampOffset() { clampOffsetFor(CROPX); }
 
 function drawCropViewport() {
-  const bmp = S.imageBitmap;
+  const bmp = CROPX.bitmap;
   const cc  = document.getElementById('crop-canvas');
   const ctx = cc.getContext('2d');
   ctx.clearRect(0, 0, CV.W, CV.H);
 
   // Convert from "scaled image space" back to source image coords
-  const { outW, outH, scale, offsetX, offsetY } = S.crop;
+  const { outW, outH, scale, offsetX, offsetY } = CROPX.crop;
   // srcX, srcY, srcW, srcH in the original bitmap
   const srcX = offsetX / scale;
   const srcY = offsetY / scale;
@@ -1133,7 +1163,7 @@ function drawCropViewport() {
     gx.beginPath(); gx.moveTo(cx+dx*bl,cy+dy*1); gx.lineTo(cx+dx*1,cy+dy*1); gx.lineTo(cx+dx*1,cy+dy*bl); gx.stroke();
   });
 
-  document.getElementById('zoom-pill').textContent = Math.round(S.crop.scale*100)+'%';
+  document.getElementById('zoom-pill').textContent = Math.round(CROPX.crop.scale*100)+'%';
 }
 
 // ── Drag / Zoom ──────────────────────────────────────
@@ -1141,41 +1171,40 @@ let drag = null;
 let lastTouches = null;
 let lastPinchDist = null;
 
-function bindCropEvents() {
-  // Clone to remove old listeners
-  const old = document.getElementById('crop-canvas');
-  const fresh = old.cloneNode(true);
-  old.parentNode.replaceChild(fresh, old);
-  // copy size
-  fresh.width = CV.W; fresh.height = CV.H;
-  fresh.style.width = CV.W+'px'; fresh.style.height = CV.H+'px';
+// Bound ONCE at init. All handlers read the active CROPX and no-op when the
+// crop stage is inactive — no per-entry rebinding, no listener accumulation.
+function initCropEvents() {
+  const cc = document.getElementById('crop-canvas');
 
-  fresh.addEventListener('mousedown', e => {
+  cc.addEventListener('mousedown', e => {
+    if (!cropStageActive()) return;
     e.preventDefault();
-    drag = { sx: e.clientX, sy: e.clientY, ox: S.crop.offsetX, oy: S.crop.offsetY };
+    drag = { sx: e.clientX, sy: e.clientY, ox: CROPX.crop.offsetX, oy: CROPX.crop.offsetY };
   });
   window.addEventListener('mousemove', e => {
-    if (!drag) return;
-    const { outW, outH, scale } = S.crop;
+    if (!drag || !cropStageActive()) return;
+    const { outW, outH, scale } = CROPX.crop;
     // Display-px delta → source-image-px delta (accounting for zoom & display scale)
     const dispPerSrcX = CV.W / outW * scale;
     const dispPerSrcY = CV.H / outH * scale;
-    S.crop.offsetX = drag.ox - (e.clientX - drag.sx) / dispPerSrcX * scale;
-    S.crop.offsetY = drag.oy - (e.clientY - drag.sy) / dispPerSrcY * scale;
+    CROPX.crop.offsetX = drag.ox - (e.clientX - drag.sx) / dispPerSrcX * scale;
+    CROPX.crop.offsetY = drag.oy - (e.clientY - drag.sy) / dispPerSrcY * scale;
     clampOffset(); drawCropViewport();
   });
   window.addEventListener('mouseup', () => { drag = null; });
 
-  fresh.addEventListener('wheel', e => {
+  cc.addEventListener('wheel', e => {
+    if (!cropStageActive()) return;
     e.preventDefault();
     const step = e.deltaY > 0 ? -0.06 : 0.06;
-    zoomAt(e.clientX, e.clientY, step, fresh);
+    zoomAt(e.clientX, e.clientY, step, cc);
   }, { passive: false });
 
-  fresh.addEventListener('touchstart', e => {
+  cc.addEventListener('touchstart', e => {
+    if (!cropStageActive()) return;
     e.preventDefault();
     if (e.touches.length === 1) {
-      drag = { sx: e.touches[0].clientX, sy: e.touches[0].clientY, ox: S.crop.offsetX, oy: S.crop.offsetY };
+      drag = { sx: e.touches[0].clientX, sy: e.touches[0].clientY, ox: CROPX.crop.offsetX, oy: CROPX.crop.offsetY };
     } else if (e.touches.length === 2) {
       drag = null;
       lastPinchDist = pinchDist(e.touches);
@@ -1183,52 +1212,50 @@ function bindCropEvents() {
     }
   }, { passive: false });
 
-  fresh.addEventListener('touchmove', e => {
+  cc.addEventListener('touchmove', e => {
+    if (!cropStageActive()) return;
     e.preventDefault();
     if (e.touches.length === 1 && drag) {
-      const { outW, outH, scale } = S.crop;
+      const { outW, outH, scale } = CROPX.crop;
       const dpx = CV.W / outW * scale;
       const dpy = CV.H / outH * scale;
-      S.crop.offsetX = drag.ox - (e.touches[0].clientX - drag.sx) / dpx * scale;
-      S.crop.offsetY = drag.oy - (e.touches[0].clientY - drag.sy) / dpy * scale;
+      CROPX.crop.offsetX = drag.ox - (e.touches[0].clientX - drag.sx) / dpx * scale;
+      CROPX.crop.offsetY = drag.oy - (e.touches[0].clientY - drag.sy) / dpy * scale;
       clampOffset(); drawCropViewport();
     } else if (e.touches.length === 2 && lastPinchDist) {
       const d = pinchDist(e.touches);
       const factor = d / lastPinchDist;
-      const mid = pinchMid(e.touches, fresh);
-      applyZoomFactor(factor, mid.x, mid.y, fresh);
+      const mid = pinchMid(e.touches, cc);
+      applyZoomFactor(factor, mid.x, mid.y, cc);
       lastPinchDist = d;
       clampOffset(); drawCropViewport();
     }
   }, { passive: false });
 
-  fresh.addEventListener('touchend', e => { if (e.touches.length===0) { drag=null; lastPinchDist=null; } });
-
-  // Re-draw
-  drawCropViewport();
+  cc.addEventListener('touchend', e => { if (e.touches.length===0) { drag=null; lastPinchDist=null; } });
 }
 
 function zoomAt(clientX, clientY, step, canvas) {
   const rect = canvas.getBoundingClientRect();
   const cx = clientX - rect.left; // display px within canvas
   const cy = clientY - rect.top;
-  const newScale = Math.max(1, Math.min(5, S.crop.scale + step));
-  applyZoomFactor(newScale / S.crop.scale, cx, cy, canvas);
+  const newScale = Math.max(1, Math.min(5, CROPX.crop.scale + step));
+  applyZoomFactor(newScale / CROPX.crop.scale, cx, cy, canvas);
 }
 
 function applyZoomFactor(factor, cx, cy, canvas) {
   // cx, cy in display pixels
-  const { outW, outH, scale } = S.crop;
+  const { outW, outH, scale } = CROPX.crop;
   const newScale = Math.max(1, Math.min(5, scale * factor));
   // Pivot: point under cursor should stay fixed
   // cursor in "scaled image px": cx / (CV.W/outW) + offsetX, but simpler:
   // offsetX_new = cursor_scaled_px * (1 - newScale/oldScale) + offsetX * newScale/oldScale
   const dispToScaled = outW / CV.W; // scaled-img-px per display-px
-  const cursorSX = cx * dispToScaled + S.crop.offsetX; // cursor in scaled-img-px
-  const cursorSY = cy * (outH / CV.H) + S.crop.offsetY;
-  S.crop.offsetX = cursorSX - cx * dispToScaled * (newScale / scale);
-  S.crop.offsetY = cursorSY - cy * (outH / CV.H) * (newScale / scale);
-  S.crop.scale = newScale;
+  const cursorSX = cx * dispToScaled + CROPX.crop.offsetX; // cursor in scaled-img-px
+  const cursorSY = cy * (outH / CV.H) + CROPX.crop.offsetY;
+  CROPX.crop.offsetX = cursorSX - cx * dispToScaled * (newScale / scale);
+  CROPX.crop.offsetY = cursorSY - cy * (outH / CV.H) * (newScale / scale);
+  CROPX.crop.scale = newScale;
   clampOffset(); drawCropViewport();
 }
 
@@ -1238,16 +1265,15 @@ function pinchMid(t, canvas) {
   return { x: (t[0].clientX+t[1].clientX)/2-r.left, y: (t[0].clientY+t[1].clientY)/2-r.top };
 }
 
-// ── Apply / Cancel ─────────────────────────────────────
+// ── Apply / Cancel — dispatch to the active crop context ──────────────
 window.applyCrop = () => {
-  S.cropApplied = true;
-  showStage('preview');
-  preloadIcons(() => renderOverlay());
+  if (!CROPX) return;
+  CROPX.applied = true;
+  CROPX.onApply();
 };
 
 window.cancelCrop = () => {
-  if (S.cropApplied) showStage('preview');
-  else showStage('empty');
+  if (CROPX) CROPX.onCancel();
 };
 
 // ══════════════════════════════════════════
@@ -1460,14 +1486,12 @@ window.deletePreset = i => { S.presets.splice(i,1); saveSettings(); renderPreset
 // ══════════════════════════════════════════
 // EXPORT
 // ══════════════════════════════════════════
-window.exportImage = async (format) => {
-  const canvas = document.getElementById('preview');
-  if (!canvas.width) { toast('No image to export', 'error'); return; }
+// Shared canvas save pipeline: native Save As dialog with download fallback
+async function saveCanvas(canvas, format, filenameBase) {
   const mime = format === 'png' ? 'image/png' : 'image/jpeg';
   const ext  = format === 'png' ? 'png' : 'jpg';
   const quality = format === 'png' ? 1 : 0.93;
-  const base = S.imageFile ? S.imageFile.name.replace(/\.[^.]+$/, '') : 'export';
-  const filename = `${base}_overlay.${ext}`;
+  const filename = `${filenameBase}.${ext}`;
   if (window.showSaveFilePicker) {
     try {
       const handle = await window.showSaveFilePicker({
@@ -1486,6 +1510,15 @@ window.exportImage = async (format) => {
   const a = document.createElement('a');
   a.href = url; a.download = filename; a.click();
   toast(`Downloaded as ${format.toUpperCase()}`, 'success');
+}
+
+window.exportImage = async (format) => {
+  if (MODE === 'layout') { toast('Layout export arrives later in M1', 'error'); return; }
+  if (MODE === 'grid')   { toast('Grid export arrives in M3', 'error'); return; }
+  const canvas = document.getElementById('preview');
+  if (!canvas.width) { toast('No image to export', 'error'); return; }
+  const base = S.imageFile ? S.imageFile.name.replace(/\.[^.]+$/, '') : 'export';
+  await saveCanvas(canvas, format, `${base}_overlay`);
 };
 
 window.exportSettings = async (format) => {
