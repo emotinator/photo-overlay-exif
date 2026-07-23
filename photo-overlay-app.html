@@ -2421,6 +2421,41 @@ function applyMoveConstraints(b, x, y, snapAllowed) {
   return { x, y, guides };
 }
 
+// Snap the MOVING edge of a resize to margin lines or the center line.
+// Corner-resizes on text keep the width↔font proportion by rescaling size
+// to the snapped width.
+function applyResizeSnap(d, g, snapAllowed) {
+  const guides = { v: null, h: null };
+  if (!L.snap || !snapAllowed) return { g, guides };
+  const { mX } = layoutMargins();
+  const thX = 6 / LV.W * 100;
+  const isCorner = d.h !== 'e' && d.h !== 'w';
+  const movingRight = d.h === 'e' || d.h === 'ne' || d.h === 'se';
+  const snapEdge = pos => {
+    if (Math.abs(pos - mX) < thX) return mX;
+    if (Math.abs(pos - (100 - mX)) < thX) return 100 - mX;
+    if (Math.abs(pos - 50) < thX) return 50;
+    return null;
+  };
+  if (movingRight) {
+    const target = snapEdge(g.x + g.w);
+    if (target !== null && target - g.x > 2) {
+      if (isCorner && d.b.type === 'text' && d.startW) g.size = d.startSize * ((target - g.x) / d.startW);
+      g.w = target - g.x;
+      guides.v = target;
+    }
+  } else {
+    const target = snapEdge(g.x);
+    if (target !== null && g.x + g.w - target > 2) {
+      const right = g.x + g.w;
+      if (isCorner && d.b.type === 'text' && d.startW) g.size = d.startSize * ((right - target) / d.startW);
+      g.x = target; g.w = right - target;
+      guides.v = target;
+    }
+  }
+  return { g, guides };
+}
+
 function showSnapGuides(guides) {
   const v = document.getElementById('snap-v');
   const h = document.getElementById('snap-h');
@@ -2857,7 +2892,8 @@ function initLayoutEditor() {
       sx: e.clientX, sy: e.clientY,
       startX: b.x, startY: b.y, startW: b.w, startSize: b.sizePct || 0,
     };
-    if (!handle) { el.classList.add('dragging'); showMarginGuide(true); }
+    if (!handle) el.classList.add('dragging');
+    showMarginGuide(true);   // margin box visible for moves AND resizes
   });
 
   ed.addEventListener('pointermove', e => {
@@ -2873,7 +2909,11 @@ function initLayoutEditor() {
         `translate(${(snap.x - d.startX) / 100 * d.frameW}px, ${(snap.y - d.startY) / 100 * d.frameH}px)`;
       showSnapGuides(snap.guides);
     } else {
-      const g = calcResize(d, dx);
+      let g = calcResize(d, dx);
+      const sr = applyResizeSnap(d, g, !e.altKey);
+      g = sr.g;
+      d.lastResize = g;
+      showSnapGuides(sr.guides);
       d.el.style.left = g.x + '%';
       d.el.style.width = g.w + '%';
       if (d.b.type === 'text') {
@@ -2902,7 +2942,7 @@ function initLayoutEditor() {
         d.startY + dy / d.frameH * 100, !e.altKey);
       d.b.x = snap.x; d.b.y = snap.y;
     } else {
-      const g = calcResize(d, dx);
+      const g = d.lastResize || calcResize(d, dx);
       d.b.x = g.x; d.b.w = g.w;
       if (d.b.type === 'text' && g.size) d.b.sizePct = g.size;
     }
