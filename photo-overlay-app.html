@@ -228,6 +228,10 @@
     pointer-events: none;
   }
 
+  .crop-zoom-row {
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 14px; width: 340px; max-width: 90%;
+  }
   .crop-hint {
     margin-top: 13px; font-size: 13px; color: var(--text3); font-family: 'DM Mono', monospace;
     text-align: center; letter-spacing: 0.03em;
@@ -922,8 +926,13 @@
         <canvas id="crop-grid-canvas"></canvas>
         <div class="zoom-pill" id="zoom-pill">100%</div>
       </div>
+      <div class="crop-zoom-row">
+        <span class="slider-label" style="width:auto;">Zoom</span>
+        <input type="range" id="crop-zoom" min="100" max="500" value="100" oninput="setCropZoom(+this.value)">
+        <span class="slider-val" id="crop-zoom-val" style="width:48px;">100%</span>
+      </div>
       <div class="crop-hint">
-        Drag to pan &nbsp;·&nbsp; <kbd>Scroll</kbd> / pinch to zoom &nbsp;·&nbsp; <kbd>R</kbd> reset
+        Drag to pan &nbsp;·&nbsp; <kbd>Scroll</kbd> / pinch or slider to zoom &nbsp;·&nbsp; <kbd>R</kbd> reset
       </div>
       <div class="crop-actions">
         <button class="btn btn-ghost" onclick="cancelCrop()">Cancel</button>
@@ -1495,8 +1504,17 @@ function drawCropViewport() {
     gx.beginPath(); gx.moveTo(cx+dx*bl,cy+dy*1); gx.lineTo(cx+dx*1,cy+dy*1); gx.lineTo(cx+dx*1,cy+dy*bl); gx.stroke();
   });
 
-  document.getElementById('zoom-pill').textContent = Math.round(CROPX.crop.scale*100)+'%';
+  const zoomPct = Math.round(CROPX.crop.scale * 100);
+  document.getElementById('zoom-pill').textContent = zoomPct + '%';
+  document.getElementById('crop-zoom').value = zoomPct;
+  document.getElementById('crop-zoom-val').textContent = zoomPct + '%';
 }
+
+// Slider zoom pivots on the viewport center (wheel/pinch pivot on the cursor)
+window.setCropZoom = v => {
+  if (!CROPX) return;
+  applyZoomFactor((v / 100) / CROPX.crop.scale, CV.W / 2, CV.H / 2, document.getElementById('crop-canvas'));
+};
 
 // ── Drag / Zoom ──────────────────────────────────────
 let drag = null;
@@ -1579,14 +1597,16 @@ function applyZoomFactor(factor, cx, cy, canvas) {
   // cx, cy in display pixels
   const { outW, outH, scale } = CROPX.crop;
   const newScale = Math.max(1, Math.min(5, scale * factor));
-  // Pivot: point under cursor should stay fixed
-  // cursor in "scaled image px": cx / (CV.W/outW) + offsetX, but simpler:
-  // offsetX_new = cursor_scaled_px * (1 - newScale/oldScale) + offsetX * newScale/oldScale
-  const dispToScaled = outW / CV.W; // scaled-img-px per display-px
-  const cursorSX = cx * dispToScaled + CROPX.crop.offsetX; // cursor in scaled-img-px
-  const cursorSY = cy * (outH / CV.H) + CROPX.crop.offsetY;
-  CROPX.crop.offsetX = cursorSX - cx * dispToScaled * (newScale / scale);
-  CROPX.crop.offsetY = cursorSY - cy * (outH / CV.H) * (newScale / scale);
+  const ratio = newScale / scale;
+  // Pivot: the source point under the cursor stays fixed. Its scaled-space
+  // coordinate scales with the image, so:
+  //   offset_new = cursor_scaled_px * ratio − cursor_display_offset_in_scaled_px
+  const dispToScaledX = outW / CV.W; // scaled-img-px per display-px
+  const dispToScaledY = outH / CV.H;
+  const cursorSX = cx * dispToScaledX + CROPX.crop.offsetX; // cursor in scaled-img-px
+  const cursorSY = cy * dispToScaledY + CROPX.crop.offsetY;
+  CROPX.crop.offsetX = cursorSX * ratio - cx * dispToScaledX;
+  CROPX.crop.offsetY = cursorSY * ratio - cy * dispToScaledY;
   CROPX.crop.scale = newScale;
   clampOffset(); drawCropViewport();
 }
