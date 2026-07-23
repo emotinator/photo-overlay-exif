@@ -696,6 +696,12 @@
               <input type="range" id="lp-contrast" min="0" max="200" oninput="setBlockProp('contrast',+this.value)">
               <span class="slider-val" id="lp-contrast-val">100%</span>
             </div>
+            <div class="field-row" style="display:flex;gap:10px;align-items:center;margin-top:10px;">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);flex:1;">
+                <input type="checkbox" id="lp-tint-on" onchange="setBlockProp('tintEnabled',this.checked)" style="accent-color:var(--accent);">Tint
+              </label>
+              <input type="color" id="lp-tint-color" value="#ffffff" oninput="setBlockProp('tintColor',this.value)" style="flex:1;">
+            </div>
             <div style="margin-top:10px;">
               <button class="btn btn-ghost btn-sm btn-full" onclick="saveImageToLibrary()">☆ Save to Collection</button>
             </div>
@@ -2307,11 +2313,24 @@ function renderLayoutBlocks() {
       buildTextLines(wrap, b, m, spec.sizePx);
     } else {
       el.style.aspectRatio = b.aspect;
-      const img = document.createElement('img');
-      img.src = b.src; img.draggable = false;
       const fs = imageFilterString(b);
-      if (fs) img.style.filter = fs;
-      el.appendChild(img);
+      if (b.tint && b.tint.enabled) {
+        // Colored silhouette via CSS mask — same result as the export's
+        // source-in composite: tint replaces color, alpha is preserved.
+        const div = document.createElement('div');
+        div.style.cssText =
+          `width:100%;height:100%;pointer-events:none;background-color:${b.tint.color || '#ffffff'};` +
+          `-webkit-mask-image:url("${b.src}");mask-image:url("${b.src}");` +
+          `-webkit-mask-size:100% 100%;mask-size:100% 100%;` +
+          `-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;`;
+        if (fs) div.style.filter = fs;
+        el.appendChild(div);
+      } else {
+        const img = document.createElement('img');
+        img.src = b.src; img.draggable = false;
+        if (fs) img.style.filter = fs;
+        el.appendChild(img);
+      }
     }
     const handles = b.type === 'text' ? ['nw','ne','sw','se','e','w'] : ['nw','ne','sw','se'];
     handles.forEach(h => {
@@ -2348,6 +2367,8 @@ function updatePropsPanel() {
       document.getElementById('lp-' + k).value = f[k];
       document.getElementById('lp-' + k + '-val').textContent = f[k] + '%';
     });
+    document.getElementById('lp-tint-on').checked = !!(b.tint && b.tint.enabled);
+    document.getElementById('lp-tint-color').value = (b.tint && b.tint.color) || '#ffffff';
   }
   if (b.type === 'text') {
     document.getElementById('lp-family').value = b.font.family;
@@ -2369,9 +2390,14 @@ const FILTER_KEYS = ['invert', 'grayscale', 'brightness', 'contrast'];
 window.setBlockProp = (key, val) => {
   const b = selBlock();
   if (!b) return;
-  if (FILTER_KEYS.includes(key)) {
-    b.filters = b.filters || { invert: 0, grayscale: 0, brightness: 100, contrast: 100 };
-    b.filters[key] = val;
+  if (FILTER_KEYS.includes(key) || key === 'tintEnabled' || key === 'tintColor') {
+    if (key === 'tintEnabled' || key === 'tintColor') {
+      b.tint = b.tint || { enabled: false, color: '#ffffff' };
+      if (key === 'tintEnabled') b.tint.enabled = !!val; else b.tint.color = val;
+    } else {
+      b.filters = b.filters || { invert: 0, grayscale: 0, brightness: 100, contrast: 100 };
+      b.filters[key] = val;
+    }
     updatePropsPanel();
     saveLayoutSettings();
     renderLayoutBlocks();
@@ -2650,10 +2676,23 @@ async function exportLayoutImage(format) {
     } else {
       try {
         const img = await getBlockImage(b);
-        const wPx = b.w / 100 * outW;
+        const wPx = b.w / 100 * outW, hPx = wPx / b.aspect;
+        let src = img;
+        if (b.tint && b.tint.enabled) {
+          // source-in tint at export resolution: color replaced, alpha kept
+          const off = document.createElement('canvas');
+          off.width = Math.max(1, Math.round(wPx));
+          off.height = Math.max(1, Math.round(hPx));
+          const octx = off.getContext('2d');
+          octx.drawImage(img, 0, 0, off.width, off.height);
+          octx.globalCompositeOperation = 'source-in';
+          octx.fillStyle = b.tint.color || '#ffffff';
+          octx.fillRect(0, 0, off.width, off.height);
+          src = off;
+        }
         const fs = imageFilterString(b);
         if (fs) ctx.filter = fs;
-        ctx.drawImage(img, b.x / 100 * outW, b.y / 100 * outH, wPx, wPx / b.aspect);
+        ctx.drawImage(src, b.x / 100 * outW, b.y / 100 * outH, wPx, hPx);
         ctx.filter = 'none';
       } catch { toast('An image block failed to render', 'error'); }
     }
