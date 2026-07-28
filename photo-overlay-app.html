@@ -330,12 +330,48 @@
     font-size: 13px; line-height: 1; cursor: pointer; display: none; z-index: 2;
   }
   .grid-cell.filled:hover .grid-cell-del { display: block; }
+  /* Reorder grip — bottom-left, clear of the number (top-left) and × (top-right) */
+  .grid-cell-grip {
+    position: absolute; bottom: 4px; left: 4px; width: 20px; height: 20px;
+    border-radius: 4px; background: rgba(0,0,0,0.55); color: #fff;
+    font-size: 12px; line-height: 20px; text-align: center; letter-spacing: 1px;
+    cursor: grab; user-select: none; display: none; z-index: 4;
+  }
+  .grid-cell:hover .grid-cell-grip { display: block; }
+  .grid-cell-grip:hover { background: var(--accent); color: #000; }
+  .grid-cell.dragging { opacity: 0.35; }
+  .grid-cell.dragging .grid-cell-grip { cursor: grabbing; }
+  /* Insertion bar, drawn inside the edge since .grid-cell clips overflow */
+  .grid-cell.drop-before::before, .grid-cell.drop-after::after {
+    content: ''; position: absolute; top: 0; bottom: 0; width: 3px;
+    background: var(--accent); z-index: 5; pointer-events: none;
+  }
+  .grid-cell.drop-before::before { left: 0; }
+  .grid-cell.drop-after::after { right: 0; }
   .grid-caption-band {
     position: absolute; left: 0; right: 0; overflow: hidden;
     display: flex; flex-direction: column; justify-content: center;
     pointer-events: none;
   }
   .grid-cell-cap { position: absolute; white-space: pre; pointer-events: none; z-index: 3; }
+
+  /* ── Cells-list drag reordering ── */
+  .cell-row { position: relative; }
+  .cell-grip {
+    flex: 0 0 auto; cursor: grab; user-select: none;
+    margin: 0 -2px 0 -3px;
+    color: var(--text3); font-size: 13px; line-height: 1;
+  }
+  .cell-grip:hover { color: var(--accent); }
+  .cell-row.dragging { opacity: 0.4; }
+  .cell-row.dragging .cell-grip { cursor: grabbing; }
+  /* Insertion line on the edge the drop would land on */
+  .cell-row.drop-above::before, .cell-row.drop-below::after {
+    content: ''; position: absolute; left: 0; right: 0; height: 2px;
+    background: var(--accent); z-index: 2; pointer-events: none;
+  }
+  .cell-row.drop-above::before { top: -4px; }   /* centred in the 5px list gap */
+  .cell-row.drop-below::after { bottom: -4px; }
   .pos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; width: 126px; }
   .pos-grid .crop-btn { padding: 5px 0; font-size: 13px; line-height: 1; }
   .count-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
@@ -849,10 +885,7 @@
         </div>
         <div class="section">
           <div class="section-label">Canvas Ratio</div>
-          <div class="crop-toggle">
-            <button class="crop-btn active" id="grid-ratio-11" onclick="setGridRatio('1:1')">1 : 1</button>
-            <button class="crop-btn" id="grid-ratio-45" onclick="setGridRatio('4:5')">4 : 5</button>
-          </div>
+          <div class="crop-toggle" id="grid-ratio-row"></div>
         </div>
         <div class="section">
           <div class="section-label">Gutter</div>
@@ -1380,7 +1413,9 @@ function setupDropZone() {
 
   window.addEventListener('dragover', e => {
     e.preventDefault();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    if (!e.dataTransfer) return;
+    // Only OS file drags are "copy"; an in-app cell reorder is a move.
+    e.dataTransfer.dropEffect = e.dataTransfer.types.includes('Files') ? 'copy' : 'move';
   });
 
   window.addEventListener('drop', e => {
@@ -3424,6 +3459,15 @@ const GRID_SPECS = {
   12: [[4,4,4]],
 };
 
+// Canvas ratios: hf = height / width. Single source of truth for the ratio
+// buttons, stage sizing, geometry and export dims.
+const GRID_RATIOS = {
+  '1:1':  { label: '1 : 1',  hf: 1 },
+  '4:5':  { label: '4 : 5',  hf: 5 / 4 },
+  '9:16': { label: '9 : 16', hf: 16 / 9 },
+};
+function ratioHF() { return (GRID_RATIOS[G.ratio] || GRID_RATIOS['1:1']).hf; }
+
 const G = {
   ratio: '1:1', count: 4, variant: 0,
   gutterPct: 1.5, gutterColor: '#ffffff',
@@ -3448,7 +3492,7 @@ function cellCount() { return gridSpec().reduce((a, b) => a + b, 0); }
 // row, one gutter width between cells and as the outer frame.
 function gridGeometry(W) {
   const spec = gridSpec();
-  const H = G.ratio === '1:1' ? W : W * 5 / 4;
+  const H = W * ratioHF();
   const g = G.gutterPct / 100 * W;
   const R = spec.length;
   const cellH = (H - (R + 1) * g) / R;
@@ -3503,11 +3547,23 @@ window.setGridVariant = v => {
   onGridGeometryChange();
 };
 window.setGridRatio = r => {
+  if (!GRID_RATIOS[r]) return;
   G.ratio = r;
-  document.getElementById('grid-ratio-11').classList.toggle('active', r === '1:1');
-  document.getElementById('grid-ratio-45').classList.toggle('active', r === '4:5');
+  syncGridRatioButtons();
   onGridGeometryChange();
 };
+
+// Renders the ratio row from GRID_RATIOS (once) and marks the active button.
+function syncGridRatioButtons() {
+  const row = document.getElementById('grid-ratio-row');
+  if (!row) return;
+  if (!row.children.length) {
+    row.innerHTML = Object.entries(GRID_RATIOS).map(([key, r]) =>
+      `<button class="crop-btn" data-ratio="${key}" onclick="setGridRatio('${key}')">${r.label}</button>`).join('');
+  }
+  row.querySelectorAll('.crop-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.ratio === G.ratio));
+}
 window.setGridGutter = v => {
   G.gutterPct = v;
   document.getElementById('grid-gutter-val').textContent = v + '%';
@@ -3659,7 +3715,7 @@ function renderGridAll() {
   updateGridCellActions();
   const ew = gridExportWidth();
   const capH = G.caption.enabled ? Math.round(G.caption.heightPct / 100 * ew) : 0;
-  const eh = Math.round((G.ratio === '1:1' ? ew : ew * 5 / 4) + capH);
+  const eh = Math.round(ew * ratioHF() + capH);
   document.getElementById('grid-dim').textContent = `${ew} × ${eh}px export`;
 }
 
@@ -3667,12 +3723,13 @@ function sizeGridStage() {
   const area = document.getElementById('canvas-area');
   const aw = area.clientWidth - 48, ah = area.clientHeight - 120;
   const capFrac = G.caption.enabled ? G.caption.heightPct / 100 : 0;
-  const unitH = (G.ratio === '1:1' ? 1 : 1.25) + capFrac;
+  const hf = ratioHF();
+  const unitH = hf + capFrac;
   let W = aw, H = W * unitH;
   if (H > ah) { H = ah; W = H / unitH; }
   GV.W = Math.floor(W);
   GV.capH = Math.round(capFrac * GV.W);
-  GV.H = Math.round(GV.W * (G.ratio === '1:1' ? 1 : 1.25)) + GV.capH;
+  GV.H = Math.round(GV.W * hf) + GV.capH;
   const frame = document.getElementById('grid-frame');
   frame.style.width = GV.W + 'px';
   frame.style.height = GV.H + 'px';
@@ -3689,6 +3746,7 @@ function renderGridCellsDom() {
     const filled = cell && cell.bitmap;
     const div = document.createElement('div');
     div.className = 'grid-cell' + (filled ? ' filled' : '') + (G.selCell === r.i ? ' selected' : '');
+    div.dataset.idx = r.i;
     div.style.left = r.x + 'px'; div.style.top = r.y + 'px';
     div.style.width = r.w + 'px'; div.style.height = r.h + 'px';
     if (filled) {
@@ -3733,9 +3791,20 @@ function renderGridCellsDom() {
       selectGridCell(r.i);                      // click selects — actions are explicit buttons
       if (!filled) pickGridCellImage(r.i);      // empty cells still open the picker directly
     };
-    div.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); div.classList.add('dragover'); });
+    const grip = document.createElement('span');
+    grip.className = 'grid-cell-grip';
+    grip.textContent = '⠿';
+    grip.title = 'Drag to reorder';
+    grip.onclick = ev => ev.stopPropagation();  // grip is for dragging, not selecting
+    div.appendChild(grip);
+    wireGridCellDrag(div, grip, r.i);
+    div.addEventListener('dragover', e => {
+      if (DRAG.from !== null) return;           // internal reorder — handled in wireGridCellDrag
+      e.preventDefault(); e.stopPropagation(); div.classList.add('dragover');
+    });
     div.addEventListener('dragleave', () => div.classList.remove('dragover'));
     div.addEventListener('drop', e => {
+      if (DRAG.from !== null) return;
       e.preventDefault(); e.stopPropagation();
       div.classList.remove('dragover');
       document.getElementById('global-drop-overlay').classList.remove('visible');
@@ -3765,6 +3834,13 @@ function renderGridCellsDom() {
     }
     frame.appendChild(band);
   }
+  // A resize mid-drag rebuilds these nodes; restore the drag paint so the
+  // lift-dim and insertion bar survive it.
+  if (DRAG.from !== null) {
+    const src = frame.querySelector(`.grid-cell[data-idx="${DRAG.from}"]`);
+    if (src) src.classList.add('dragging');
+    if (DRAG.over !== null) paintGridDropTarget();
+  }
 }
 
 function renderCellList() {
@@ -3778,7 +3854,9 @@ function renderCellList() {
     const hasCap = cell && cell.caption && cell.caption.text.trim();
     const name = filled && cell.file ? escapeHtml(cell.file.name.length > 16 ? cell.file.name.slice(0, 16) + '…' : cell.file.name)
                                      : '<span style="opacity:0.55;">empty</span>';
-    html += `<div class="preset-item" style="cursor:pointer;${G.selCell === i ? 'border-color:var(--accent);' : ''}" onclick="selectGridCell(${i})">` +
+    html += `<div class="preset-item cell-row" data-idx="${i}" ` +
+        `style="cursor:pointer;${G.selCell === i ? 'border-color:var(--accent);' : ''}" onclick="selectGridCell(${i})">` +
+      `<span class="cell-grip" title="Drag to reorder">⠿</span>` +
       `<span class="preset-name">${i + 1} · ${name}${hasCap ? ' <span style="opacity:0.6;">❝</span>' : ''}</span>` +
       (filled
         ? `<button class="preset-use" onclick="event.stopPropagation();enterGridCellCrop(${i})">Crop</button><button class="preset-del" onclick="event.stopPropagation();clearGridCell(${i})">×</button>`
@@ -3786,6 +3864,168 @@ function renderCellList() {
       `</div>`;
   }
   list.innerHTML = html;
+  wireCellListDrag(list);
+}
+
+// ── Cells-list drag reordering ─────────────────────────────────────────────
+// HTML5 drag on the list rows. The drag carries only 'text/grid-cell' (never
+// Files), so the window-level drop overlay — which gates on a 'Files' type —
+// stays out of the way.
+// over/after = the cell the pointer is on, and whether the insert lands after it
+const DRAG = { from: null, over: null, after: false };
+
+function wireCellListDrag(list) {
+  list.querySelectorAll('.cell-row').forEach(row => {
+    const idx = +row.dataset.idx;
+
+    // Only the grip arms the drag, so clicking Crop / × / the row itself
+    // behaves normally and the filename stays selectable.
+    const grip = row.querySelector('.cell-grip');
+    grip.addEventListener('mousedown', () => { row.draggable = true; });
+    grip.addEventListener('mouseup', () => { row.draggable = false; });
+
+    row.addEventListener('dragstart', e => {
+      DRAG.from = idx;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/grid-cell', String(idx));
+      row.classList.add('dragging');
+    });
+
+    row.addEventListener('dragover', e => {
+      if (DRAG.from === null) return;          // not our drag (e.g. OS file drop)
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'move';
+      const r = row.getBoundingClientRect();
+      const after = e.clientY > r.top + r.height / 2;   // list flows top-to-bottom
+      if (DRAG.over === idx && DRAG.after === after) return;
+      DRAG.over = idx; DRAG.after = after;
+      paintDropTarget(list);
+    });
+
+    row.addEventListener('drop', e => {
+      if (DRAG.from === null) return;
+      e.preventDefault();
+      e.stopPropagation();
+      // Insert position in the pre-removal index space, then correct for the
+      // gap left behind when the dragged row sat above the target.
+      let to = idx + (DRAG.after ? 1 : 0);
+      if (DRAG.from < to) to--;
+      const from = DRAG.from;
+      // renderCellList() below replaces these rows, so dragend may never fire —
+      // clear the drag state here rather than relying on it.
+      DRAG.from = DRAG.over = null;
+      row.draggable = false;
+      moveGridCell(from, to);
+    });
+
+    row.addEventListener('dragend', () => {
+      DRAG.from = DRAG.over = null;
+      row.draggable = false;
+      list.querySelectorAll('.cell-row').forEach(r =>
+        r.classList.remove('dragging', 'drop-above', 'drop-below'));
+    });
+  });
+}
+
+// Stage-cell reordering. Same move-and-shift semantics and the same
+// moveGridCell() as the list; only the hit-testing axis differs — cells flow
+// left-to-right, so the horizontal midpoint decides insert-before vs -after.
+function wireGridCellDrag(div, grip, idx) {
+  grip.addEventListener('mousedown', () => { div.draggable = true; });
+  grip.addEventListener('mouseup', () => { div.draggable = false; });
+
+  div.addEventListener('dragstart', e => {
+    DRAG.from = idx;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/grid-cell', String(idx));
+    div.classList.add('dragging');
+  });
+
+  div.addEventListener('dragover', e => {
+    if (DRAG.from === null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    const b = div.getBoundingClientRect();
+    const after = e.clientX > b.left + b.width / 2;
+    if (DRAG.over === idx && DRAG.after === after) return;
+    DRAG.over = idx; DRAG.after = after;
+    paintGridDropTarget();
+  });
+
+  div.addEventListener('drop', e => {
+    if (DRAG.from === null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    let to = idx + (DRAG.after ? 1 : 0);
+    if (DRAG.from < to) to--;
+    const from = DRAG.from;
+    DRAG.from = DRAG.over = null;   // renderGridAll() replaces these nodes
+    div.draggable = false;
+    moveGridCell(from, to);
+  });
+
+  div.addEventListener('dragend', () => {
+    DRAG.from = DRAG.over = null;
+    div.draggable = false;
+    clearGridDropPaint();
+  });
+}
+
+function paintGridDropTarget() {
+  document.querySelectorAll('#grid-frame .grid-cell').forEach(c => {
+    const on = +c.dataset.idx === DRAG.over;
+    c.classList.toggle('drop-before', on && !DRAG.after);
+    c.classList.toggle('drop-after', on && DRAG.after);
+  });
+}
+
+function clearGridDropPaint() {
+  document.querySelectorAll('#grid-frame .grid-cell').forEach(c =>
+    c.classList.remove('dragging', 'drop-before', 'drop-after', 'dragover'));
+}
+
+function paintDropTarget(list) {
+  list.querySelectorAll('.cell-row').forEach(r => {
+    const on = +r.dataset.idx === DRAG.over;
+    r.classList.toggle('drop-above', on && !DRAG.after);
+    r.classList.toggle('drop-below', on && DRAG.after);
+  });
+}
+
+// Move a cell (image + caption + crop travel together) and re-settle the grid.
+function moveGridCell(from, to) {
+  const n = cellCount();
+  if (from === to || from == null || to == null) return;
+  if (from < 0 || from >= n || to < 0 || to >= n) return;
+  const arr = Array.from({ length: n }, (_, i) => G.cells[i] || null);
+  const [moved] = arr.splice(from, 1);
+  arr.splice(to, 0, moved);
+  G.cells = arr;
+  if (G.selCell === from) G.selCell = to;                        // selection follows the cell
+  else if (G.selCell !== null && G.selCell !== undefined) {
+    if (from < G.selCell && to >= G.selCell) G.selCell--;        // it shifted up
+    else if (from > G.selCell && to <= G.selCell) G.selCell++;   // it shifted down
+  }
+  refitCellCrops();
+  renderGridAll();
+  renderCellList();
+  updateCellCapPanel();
+}
+
+// After a move, re-fit only those crops whose cell aspect actually changed —
+// in uniform layouts every cell shares one aspect, so hand-made crops survive.
+function refitCellCrops() {
+  G.cells.forEach((cell, i) => {
+    if (!cell || !cell.bitmap || i >= cellCount()) return;
+    const a = cellAspect(i);
+    const want = a.w / a.h, have = cell.crop.outW / cell.crop.outH;
+    if (Math.abs(want - have) > 0.001) {
+      resetCropState({ bitmap: cell.bitmap, aspect: a, crop: cell.crop });
+      cell.cropApplied = true;
+    }
+  });
 }
 
 // ── Export (full resolution, existing save pipeline) ───────────────────────
@@ -3890,7 +4130,7 @@ function saveGridSettings() {
 function loadGridStorage() {
   try {
     const saved = JSON.parse(localStorage.getItem('framedata-grid') || '{}');
-    if (saved.ratio) G.ratio = saved.ratio;
+    if (saved.ratio && GRID_RATIOS[saved.ratio]) G.ratio = saved.ratio;
     if (saved.count && GRID_SPECS[saved.count]) G.count = saved.count;
     if (saved.variant !== undefined && GRID_SPECS[G.count][saved.variant]) G.variant = saved.variant;
     if (saved.gutterPct !== undefined) G.gutterPct = saved.gutterPct;
@@ -3907,8 +4147,7 @@ function initGridMode() {
   document.getElementById('grid-variant-section').style.display = GRID_SPECS[G.count].length > 1 ? '' : 'none';
   document.getElementById('grid-var-h').classList.toggle('active', G.variant === 0);
   document.getElementById('grid-var-v').classList.toggle('active', G.variant === 1);
-  document.getElementById('grid-ratio-11').classList.toggle('active', G.ratio === '1:1');
-  document.getElementById('grid-ratio-45').classList.toggle('active', G.ratio === '4:5');
+  syncGridRatioButtons();
   document.getElementById('grid-gutter').value = G.gutterPct;
   document.getElementById('grid-gutter-val').textContent = G.gutterPct + '%';
   document.getElementById('grid-gutter-color').value = G.gutterColor;
