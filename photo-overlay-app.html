@@ -330,6 +330,24 @@
     font-size: 13px; line-height: 1; cursor: pointer; display: none; z-index: 2;
   }
   .grid-cell.filled:hover .grid-cell-del { display: block; }
+  /* Reorder grip — bottom-left, clear of the number (top-left) and × (top-right) */
+  .grid-cell-grip {
+    position: absolute; bottom: 4px; left: 4px; width: 20px; height: 20px;
+    border-radius: 4px; background: rgba(0,0,0,0.55); color: #fff;
+    font-size: 12px; line-height: 20px; text-align: center; letter-spacing: 1px;
+    cursor: grab; user-select: none; display: none; z-index: 4;
+  }
+  .grid-cell:hover .grid-cell-grip { display: block; }
+  .grid-cell-grip:hover { background: var(--accent); color: #000; }
+  .grid-cell.dragging { opacity: 0.35; }
+  .grid-cell.dragging .grid-cell-grip { cursor: grabbing; }
+  /* Insertion bar, drawn inside the edge since .grid-cell clips overflow */
+  .grid-cell.drop-before::before, .grid-cell.drop-after::after {
+    content: ''; position: absolute; top: 0; bottom: 0; width: 3px;
+    background: var(--accent); z-index: 5; pointer-events: none;
+  }
+  .grid-cell.drop-before::before { left: 0; }
+  .grid-cell.drop-after::after { right: 0; }
   .grid-caption-band {
     position: absolute; left: 0; right: 0; overflow: hidden;
     display: flex; flex-direction: column; justify-content: center;
@@ -3728,6 +3746,7 @@ function renderGridCellsDom() {
     const filled = cell && cell.bitmap;
     const div = document.createElement('div');
     div.className = 'grid-cell' + (filled ? ' filled' : '') + (G.selCell === r.i ? ' selected' : '');
+    div.dataset.idx = r.i;
     div.style.left = r.x + 'px'; div.style.top = r.y + 'px';
     div.style.width = r.w + 'px'; div.style.height = r.h + 'px';
     if (filled) {
@@ -3772,9 +3791,20 @@ function renderGridCellsDom() {
       selectGridCell(r.i);                      // click selects — actions are explicit buttons
       if (!filled) pickGridCellImage(r.i);      // empty cells still open the picker directly
     };
-    div.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); div.classList.add('dragover'); });
+    const grip = document.createElement('span');
+    grip.className = 'grid-cell-grip';
+    grip.textContent = '⠿';
+    grip.title = 'Drag to reorder';
+    grip.onclick = ev => ev.stopPropagation();  // grip is for dragging, not selecting
+    div.appendChild(grip);
+    wireGridCellDrag(div, grip, r.i);
+    div.addEventListener('dragover', e => {
+      if (DRAG.from !== null) return;           // internal reorder — handled in wireGridCellDrag
+      e.preventDefault(); e.stopPropagation(); div.classList.add('dragover');
+    });
     div.addEventListener('dragleave', () => div.classList.remove('dragover'));
     div.addEventListener('drop', e => {
+      if (DRAG.from !== null) return;
       e.preventDefault(); e.stopPropagation();
       div.classList.remove('dragover');
       document.getElementById('global-drop-overlay').classList.remove('visible');
@@ -3803,6 +3833,13 @@ function renderGridCellsDom() {
       });
     }
     frame.appendChild(band);
+  }
+  // A resize mid-drag rebuilds these nodes; restore the drag paint so the
+  // lift-dim and insertion bar survive it.
+  if (DRAG.from !== null) {
+    const src = frame.querySelector(`.grid-cell[data-idx="${DRAG.from}"]`);
+    if (src) src.classList.add('dragging');
+    if (DRAG.over !== null) paintGridDropTarget();
   }
 }
 
@@ -3834,7 +3871,8 @@ function renderCellList() {
 // HTML5 drag on the list rows. The drag carries only 'text/grid-cell' (never
 // Files), so the window-level drop overlay — which gates on a 'Files' type —
 // stays out of the way.
-const DRAG = { from: null, over: null, below: false };
+// over/after = the cell the pointer is on, and whether the insert lands after it
+const DRAG = { from: null, over: null, after: false };
 
 function wireCellListDrag(list) {
   list.querySelectorAll('.cell-row').forEach(row => {
@@ -3859,9 +3897,9 @@ function wireCellListDrag(list) {
       e.stopPropagation();
       e.dataTransfer.dropEffect = 'move';
       const r = row.getBoundingClientRect();
-      const below = e.clientY > r.top + r.height / 2;
-      if (DRAG.over === idx && DRAG.below === below) return;
-      DRAG.over = idx; DRAG.below = below;
+      const after = e.clientY > r.top + r.height / 2;   // list flows top-to-bottom
+      if (DRAG.over === idx && DRAG.after === after) return;
+      DRAG.over = idx; DRAG.after = after;
       paintDropTarget(list);
     });
 
@@ -3871,7 +3909,7 @@ function wireCellListDrag(list) {
       e.stopPropagation();
       // Insert position in the pre-removal index space, then correct for the
       // gap left behind when the dragged row sat above the target.
-      let to = idx + (DRAG.below ? 1 : 0);
+      let to = idx + (DRAG.after ? 1 : 0);
       if (DRAG.from < to) to--;
       const from = DRAG.from;
       // renderCellList() below replaces these rows, so dragend may never fire —
@@ -3890,11 +3928,69 @@ function wireCellListDrag(list) {
   });
 }
 
+// Stage-cell reordering. Same move-and-shift semantics and the same
+// moveGridCell() as the list; only the hit-testing axis differs — cells flow
+// left-to-right, so the horizontal midpoint decides insert-before vs -after.
+function wireGridCellDrag(div, grip, idx) {
+  grip.addEventListener('mousedown', () => { div.draggable = true; });
+  grip.addEventListener('mouseup', () => { div.draggable = false; });
+
+  div.addEventListener('dragstart', e => {
+    DRAG.from = idx;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/grid-cell', String(idx));
+    div.classList.add('dragging');
+  });
+
+  div.addEventListener('dragover', e => {
+    if (DRAG.from === null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    const b = div.getBoundingClientRect();
+    const after = e.clientX > b.left + b.width / 2;
+    if (DRAG.over === idx && DRAG.after === after) return;
+    DRAG.over = idx; DRAG.after = after;
+    paintGridDropTarget();
+  });
+
+  div.addEventListener('drop', e => {
+    if (DRAG.from === null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    let to = idx + (DRAG.after ? 1 : 0);
+    if (DRAG.from < to) to--;
+    const from = DRAG.from;
+    DRAG.from = DRAG.over = null;   // renderGridAll() replaces these nodes
+    div.draggable = false;
+    moveGridCell(from, to);
+  });
+
+  div.addEventListener('dragend', () => {
+    DRAG.from = DRAG.over = null;
+    div.draggable = false;
+    clearGridDropPaint();
+  });
+}
+
+function paintGridDropTarget() {
+  document.querySelectorAll('#grid-frame .grid-cell').forEach(c => {
+    const on = +c.dataset.idx === DRAG.over;
+    c.classList.toggle('drop-before', on && !DRAG.after);
+    c.classList.toggle('drop-after', on && DRAG.after);
+  });
+}
+
+function clearGridDropPaint() {
+  document.querySelectorAll('#grid-frame .grid-cell').forEach(c =>
+    c.classList.remove('dragging', 'drop-before', 'drop-after', 'dragover'));
+}
+
 function paintDropTarget(list) {
   list.querySelectorAll('.cell-row').forEach(r => {
     const on = +r.dataset.idx === DRAG.over;
-    r.classList.toggle('drop-above', on && !DRAG.below);
-    r.classList.toggle('drop-below', on && DRAG.below);
+    r.classList.toggle('drop-above', on && !DRAG.after);
+    r.classList.toggle('drop-below', on && DRAG.after);
   });
 }
 
