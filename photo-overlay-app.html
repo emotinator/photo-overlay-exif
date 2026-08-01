@@ -603,34 +603,31 @@
         <div class="section">
           <div class="section-label">Border / Matte</div>
           <div class="field-row" style="margin-bottom:10px;">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);">
-              <input type="checkbox" id="lay-border-precrop" onchange="setBorderPreCrop(this.checked)" style="accent-color:var(--accent);">Bake into image (pre-crop)
-            </label>
-            <div class="drop-text" style="text-align:left;font-size:12px;margin-top:5px;">ON: the border becomes part of the photo before cropping — the final image keeps the selected aspect ratio (e.g. a polaroid chin). OFF: the border is applied after cropping, per-edge IN/OUT.</div>
+            <div class="drop-text" style="text-align:left;font-size:12px;">Widths are % of the final canvas width. <b>IN</b> paints over the photo's edge. <b>OUT</b> reserves a strip and shrinks the photo to fit — that's your polaroid chin. Either way the export keeps the selected aspect ratio.</div>
           </div>
           <div class="slider-row">
             <span class="slider-label">Top</span>
             <input type="range" id="lay-border-top" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('top',+this.value)">
             <span class="slider-val" id="lay-border-top-val">0%</span>
-            <button class="border-side-toggle" id="lay-border-top-mode" onclick="toggleBorderSide('top')" title="IN masks the image edge · OUT expands the canvas">IN</button>
+            <button class="border-side-toggle" id="lay-border-top-mode" onclick="toggleBorderSide('top')" title="IN paints over the photo edge · OUT reserves a strip and shrinks the photo">IN</button>
           </div>
           <div class="slider-row">
             <span class="slider-label">Right</span>
             <input type="range" id="lay-border-right" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('right',+this.value)">
             <span class="slider-val" id="lay-border-right-val">0%</span>
-            <button class="border-side-toggle" id="lay-border-right-mode" onclick="toggleBorderSide('right')" title="IN masks the image edge · OUT expands the canvas">IN</button>
+            <button class="border-side-toggle" id="lay-border-right-mode" onclick="toggleBorderSide('right')" title="IN paints over the photo edge · OUT reserves a strip and shrinks the photo">IN</button>
           </div>
           <div class="slider-row">
             <span class="slider-label">Bottom</span>
             <input type="range" id="lay-border-bottom" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('bottom',+this.value)">
             <span class="slider-val" id="lay-border-bottom-val">0%</span>
-            <button class="border-side-toggle" id="lay-border-bottom-mode" onclick="toggleBorderSide('bottom')" title="IN masks the image edge · OUT expands the canvas">IN</button>
+            <button class="border-side-toggle" id="lay-border-bottom-mode" onclick="toggleBorderSide('bottom')" title="IN paints over the photo edge · OUT reserves a strip and shrinks the photo">IN</button>
           </div>
           <div class="slider-row">
             <span class="slider-label">Left</span>
             <input type="range" id="lay-border-left" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('left',+this.value)">
             <span class="slider-val" id="lay-border-left-val">0%</span>
-            <button class="border-side-toggle" id="lay-border-left-mode" onclick="toggleBorderSide('left')" title="IN masks the image edge · OUT expands the canvas">IN</button>
+            <button class="border-side-toggle" id="lay-border-left-mode" onclick="toggleBorderSide('left')" title="IN paints over the photo edge · OUT reserves a strip and shrinks the photo">IN</button>
           </div>
           <div class="field-row" style="display:flex;gap:10px;align-items:center;margin-top:8px;">
             <div class="field-label" style="margin:0;flex:1;">Border Color</div>
@@ -1211,7 +1208,37 @@ const CHECKBOX_KEYS = [
 // get a stepwise migration here, run once at boot, tracked by
 // framedata-schema. Copies of the app opened against an older profile upgrade
 // on first load.
-const SCHEMA_VERSION = 2;
+// v2→v3 helper. Old block coords were % of the PHOTO area; new ones are % of
+// the whole canvas. The two only differ where an OUT edge existed, and the
+// conversion factors fall out of the stored percentages alone:
+//   canvasW / photoW = 1 + lOut + rOut          (border % were % of photo width)
+//   canvasH / photoW = 1/R + tOut + bOut        (R = selected canvas ratio)
+// 'original' leaves R unknown at migration time (the image isn't persisted), so
+// that one combination keeps its coords and may drift a little.
+function rebaseBlocksToCanvas(lay, b) {
+  const out = b.outside || {};
+  const f = s => (out[s] ? (b[s] || 0) : 0) / 100;
+  const lO = f('left'), rO = f('right'), tO = f('top'), bO = f('bottom');
+  if (!(lO || rO || tO || bO)) return;            // no OUT edges → identity
+  const R = lay.cropRatio === '1:1' ? 1 : lay.cropRatio === '4:5' ? 4 / 5 : null;
+  const kX = 1 + lO + rO;
+  if (kX !== 1) {
+    lay.blocks.forEach(blk => {
+      blk.x = (blk.x / 100 + lO) / kX * 100;
+      blk.w = blk.w / kX;
+      if (blk.sizePct) blk.sizePct = blk.sizePct / kX;
+    });
+    if (lay.marginPct !== undefined) lay.marginPct = lay.marginPct / kX;
+  }
+  if (R && (tO || bO)) {
+    const kY = 1 / R + tO + bO;
+    lay.blocks.forEach(blk => { blk.y = (blk.y / 100 / R + tO) / kY * 100; });
+  } else if (!R && (tO || bO)) {
+    console.warn("v2→v3: cropRatio 'original' — vertical block coords left as-is");
+  }
+}
+
+const SCHEMA_VERSION = 3;
 function migrateStorage() {
   try {
     let v = parseInt(localStorage.getItem('framedata-schema') || '1', 10);
@@ -1228,6 +1255,28 @@ function migrateStorage() {
         }
       } catch {}
       v = 2;
+    }
+    if (v === 2) {
+      // v2 → v3: border geometry unified. `preCrop` (bake into the source before
+      // cropping) is gone — OUT edges now do the same job correctly, so a baked
+      // border becomes all-four-OUT. Block coords also move from photo-relative
+      // to canvas-relative, which only shifts anything when OUT edges existed.
+      try {
+        const lay = JSON.parse(localStorage.getItem('framedata-layout') || 'null');
+        if (lay && lay.border) {
+          const b = lay.border;
+          const baked = !!b.preCrop;
+          delete b.preCrop;
+          if (baked) {
+            // Under the bake, the canvas WAS the photo area — blocks need no rebase.
+            b.outside = { top: true, right: true, bottom: true, left: true };
+          } else if (Array.isArray(lay.blocks) && lay.blocks.length) {
+            rebaseBlocksToCanvas(lay, b);
+          }
+          localStorage.setItem('framedata-layout', JSON.stringify(lay));
+        }
+      } catch (e) { console.warn('v2→v3 layout migration failed:', e); }
+      v = 3;
     }
     localStorage.setItem('framedata-schema', String(v));
   } catch (e) { console.warn('storage migration failed:', e); }
@@ -2031,22 +2080,22 @@ window.exportSettings = async (format) => {
 // ══════════════════════════════════════════
 const L = {
   imageFile: null,
-  srcBitmap: null,      // pristine original — pre-crop bakes always start from this
-  imageBitmap: null,    // effective source: original, or original + baked border
-  cropRatio: '4:5',
-  crop: { scale: 1, offsetX: 0, offsetY: 0, outW: 0, outH: 0 },
+  imageBitmap: null,    // the photo, untouched — the matte is never baked into it
+  cropRatio: '4:5',     // the FINAL canvas ratio; the photo's crop ratio is derived
+  crop: { scale: 1, offsetX: 0, offsetY: 0, outW: 0, outH: 0 },   // outW/H = photo box
   cropApplied: false,
+  frame: null,          // cached geometry from refreshLayoutFrame()
   blur: 0, darken: 0,
   marginPct: 5, snap: 1,
   isBlank: false, canvasColor: '#ffffff',
-  border: { top: 0, right: 0, bottom: 0, left: 0, outside: { top: false, right: false, bottom: false, left: false }, color: '#ffffff', preCrop: false },
+  border: { top: 0, right: 0, bottom: 0, left: 0, outside: { top: false, right: false, bottom: false, left: false }, color: '#ffffff' },
   blocks: [], selectedId: null, nextId: 1,
   loadedFonts: [], customFonts: [],
 };
 S.layout = L;
 
-// Layout viewport display metrics (display px + display-per-output scale k)
-const LV = { W: 0, H: 0, k: 1 };
+// Layout viewport display metrics: TW/TH = canvas display px, k = display per output px
+const LV = { TW: 0, TH: 0, k: 1 };
 
 // ══════════════════════════════════════════
 // FONTS (curated Google Fonts, dynamic load)
@@ -2311,9 +2360,8 @@ async function loadLayoutImage(file) {
   try {
     L.imageFile = file;
     L.isBlank = false;
-    L.srcBitmap = await createImageBitmap(file);
-    L._padL = 0; L._padT = 0;
-    rebuildLayoutSource();
+    L.imageBitmap = await createImageBitmap(file);
+    L.frame = null;
     L.cropApplied = false;
     document.getElementById('lay-recrop-btn').disabled = false;
     enterLayoutCropMode();
@@ -2335,10 +2383,10 @@ function makeBlankSource() {
   const x = c.getContext('2d');
   x.fillStyle = L.canvasColor || '#ffffff';
   x.fillRect(0, 0, d.w, d.h);
-  L.srcBitmap = c;
-  L._padL = 0; L._padT = 0;
-  rebuildLayoutSource();
-  resetCropState({ bitmap: L.imageBitmap, aspect: L.cropRatio, crop: L.crop });
+  L.imageBitmap = c;
+  L.frame = null;
+  resetCropState({ bitmap: L.imageBitmap, aspect: photoAspect(), crop: L.crop });
+  refreshLayoutFrame();
   L.cropApplied = true;
 }
 
@@ -2356,11 +2404,10 @@ window.createBlankCanvas = () => {
 window.setCanvasColor = v => {
   L.canvasColor = v;
   saveLayoutSettings();
-  if (L.isBlank && L.srcBitmap) {
-    const x = L.srcBitmap.getContext('2d');
+  if (L.isBlank && L.imageBitmap) {
+    const x = L.imageBitmap.getContext('2d');
     x.fillStyle = v;
-    x.fillRect(0, 0, L.srcBitmap.width, L.srcBitmap.height);
-    rebuildLayoutSource();
+    x.fillRect(0, 0, L.imageBitmap.width, L.imageBitmap.height);
     if (L.cropApplied) renderLayoutAll();
   }
 };
@@ -2369,7 +2416,7 @@ window.enterLayoutCropMode = () => {
   if (!L.imageBitmap) return;
   openCrop({
     bitmap: L.imageBitmap,
-    aspect: L.cropRatio,
+    aspect: photoAspect(),   // derived: the canvas ratio minus what OUT edges reserve
     crop: L.crop,
     applied: L.cropApplied,
     onApply:  () => { L.cropApplied = true; showStage('layout'); renderLayoutAll(); },
@@ -2385,7 +2432,7 @@ window.setLayoutCropRatio = (ratio, btn) => {
   if (L.isBlank) {   // regenerate the canvas at the new ratio instead of cropping it
     makeBlankSource();
     if (CROPX && CROPX.crop === L.crop && currentStage === 'crop') {
-      CROPX.aspect = ratio; CROPX.bitmap = L.imageBitmap;
+      CROPX.aspect = photoAspect(); CROPX.bitmap = L.imageBitmap;
       sizeCropCanvas(); resetCropTransform(); drawCropViewport();
     } else {
       renderLayoutAll();
@@ -2394,10 +2441,10 @@ window.setLayoutCropRatio = (ratio, btn) => {
   }
   if (!L.imageBitmap) return;
   if (CROPX && CROPX.crop === L.crop && currentStage === 'crop') {
-    CROPX.aspect = ratio;
+    CROPX.aspect = photoAspect();
     sizeCropCanvas(); resetCropTransform(); drawCropViewport();
   } else {
-    resetCropState({ bitmap: L.imageBitmap, aspect: ratio, crop: L.crop });
+    resetCropState({ bitmap: L.imageBitmap, aspect: photoAspect(), crop: L.crop });
     if (L.cropApplied) renderLayoutAll();
   }
 };
@@ -2419,62 +2466,94 @@ function drawCroppedBackground(ctx, bitmap, crop, blurPx, darken, destW, destH) 
   if (darken > 0) { ctx.fillStyle = `rgba(0,0,0,${darken / 100})`; ctx.fillRect(0, 0, destW, destH); }
 }
 
-// Border widths in output px (all four derive from % of image width so the
-// matte is resolution-independent). `outside` grows the canvas; inset masks
-// the image edges in place.
-function layoutBorder() {
-  const b = L.border || {};
-  // Pre-crop borders are baked into the source bitmap — nothing post-crop to draw
-  if (b.preCrop) return { t: 0, r: 0, btm: 0, l: 0, oT: false, oR: false, oB: false, oL: false, color: b.color || '#ffffff', any: false };
-  const o = b.outside || {};
-  const u = L.crop.outW / 100;
-  const t = (b.top || 0) * u, r = (b.right || 0) * u;
-  const btm = (b.bottom || 0) * u, l = (b.left || 0) * u;
-  return {
-    t, r, btm, l,
-    oT: !!o.top, oR: !!o.right, oB: !!o.bottom, oL: !!o.left,
-    color: b.color || '#ffffff', any: t + r + btm + l > 0,
-  };
+// ══════════════════════════════════════════
+// LAYOUT — frame geometry (single source of truth)
+// ══════════════════════════════════════════
+// The output canvas ALWAYS matches the selected aspect ratio. Border widths
+// are ALWAYS % of the final canvas WIDTH, so all four edges come out equal in
+// px and the matte is resolution-independent. Each edge is IN or OUT:
+//   IN  — paints over the photo's edge; reserves nothing, photo area unchanged.
+//   OUT — reserves a strip; the photo area shrinks to whatever is left.
+// The photo's crop ratio is therefore DERIVED from the space the OUT edges
+// leave behind, which is what lets a polaroid chin exist without breaking 4:5.
+const BORDER_MAX_RESERVE = 0.8;   // OUT edges may never eat >80% of an axis
+const CANVAS_MAX_PX = 8000;       // sanity cap — wide OUT mattes inflate the canvas
+
+function selectedRatio() {
+  if (L.cropRatio === '1:1') return 1;
+  if (L.cropRatio === '4:5') return 4 / 5;
+  const src = L.imageBitmap;                     // 'original'
+  return src ? src.width / src.height : 4 / 5;
 }
 
-// ── Pre-crop bake: pad the ORIGINAL image with the border, then let the crop
-//    and every later stage treat the result as the photo. Always rebuilt from
-//    L.srcBitmap so adjustments re-bake cleanly instead of accumulating.
-function rebuildLayoutSource() {
-  if (!L.srcBitmap) return;
-  const b = L.border;
-  const prevL = L._padL || 0, prevT = L._padT || 0;
-  let l = 0, t = 0;
-  if (b.preCrop && ((b.top || 0) + (b.right || 0) + (b.bottom || 0) + (b.left || 0)) > 0) {
-    const u = L.srcBitmap.width / 100;
-    t = Math.round((b.top || 0) * u);
-    const r = Math.round((b.right || 0) * u);
-    const btm = Math.round((b.bottom || 0) * u);
-    l = Math.round((b.left || 0) * u);
-    const c = document.createElement('canvas');
-    c.width = L.srcBitmap.width + l + r;
-    c.height = L.srcBitmap.height + t + btm;
-    const x = c.getContext('2d');
-    x.fillStyle = b.color || '#ffffff';
-    x.fillRect(0, 0, c.width, c.height);
-    x.drawImage(L.srcBitmap, l, t);
-    L.imageBitmap = c;
-  } else {
-    L.imageBitmap = L.srcBitmap;
-  }
-  // Anchor the crop to the ORIGINAL content: shift offsets by the padding delta
-  L.crop.offsetX += (l - prevL) * L.crop.scale;
-  L.crop.offsetY += (t - prevT) * L.crop.scale;
-  L._padL = l; L._padT = t;
+// Fractions of canvas WIDTH reserved by each OUT edge. Clamped so a wide
+// 'original' ratio can't be asked to fund a matte taller than the canvas.
+// innerWU / innerHU are the photo box's dimensions in canvas-width units.
+function borderReserve() {
+  const b = L.border || {}, o = b.outside || {};
+  const R = selectedRatio();
+  const f = s => (o[s] ? (b[s] || 0) : 0) / 100;
+  let l = f('left'), r = f('right'), t = f('top'), btm = f('bottom');
+  const sx = l + r;
+  if (sx > BORDER_MAX_RESERVE) { const k = BORDER_MAX_RESERVE / sx; l *= k; r *= k; }
+  const capY = BORDER_MAX_RESERVE / R;           // 1/R = canvas height in width units
+  const sy = t + btm;
+  if (sy > capY) { const k = capY / sy; t *= k; btm *= k; }
+  return { l, r, t, b: btm, R, innerWU: 1 - (l + r), innerHU: 1 / R - (t + btm) };
 }
 
-function refreshLayoutCropAfterSourceChange() {
-  if (!L.imageBitmap) return;
-  const d = getOutputDims(L.imageBitmap, L.cropRatio);
-  L.crop.outW = d.outW; L.crop.outH = d.outH;
+// The crop ratio the crop stage must produce for the photo to exactly fill
+// what the OUT edges leave. Object form is what getOutputDims() expects.
+function photoAspect() {
+  const g = borderReserve();
+  return { w: g.innerWU, h: g.innerHU };
+}
+
+// Recompute canvas + photo box, writing the canvas-exact photo dims back into
+// L.crop so the preview and the export can never drift apart. Cached on
+// L.frame; renderers read it through layoutFrame().
+function refreshLayoutFrame() {
+  if (!L.imageBitmap) { L.frame = null; return null; }
+  const g = borderReserve();
+  const d = getOutputDims(L.imageBitmap, photoAspect());
+  let canvasW = g.innerWU > 0 ? Math.round(d.outW / g.innerWU) : d.outW;
+  let canvasH = Math.round(canvasW / g.R);
+  const over = Math.max(canvasW, canvasH) / CANVAS_MAX_PX;
+  if (over > 1) { canvasW = Math.round(canvasW / over); canvasH = Math.round(canvasH / over); }
+  const bd = L.border || {}, out = bd.outside || {};
+  const u = canvasW / 100;
+  const l = Math.round((bd.left || 0) * u),  r = Math.round((bd.right || 0) * u);
+  const t = Math.round((bd.top || 0) * u), btm = Math.round((bd.bottom || 0) * u);
+  const oL = !!out.left, oR = !!out.right, oT = !!out.top, oB = !!out.bottom;
+  L.crop.outW = Math.max(1, canvasW - (oL ? l : 0) - (oR ? r : 0));
+  L.crop.outH = Math.max(1, canvasH - (oT ? t : 0) - (oB ? btm : 0));
+  // The rounding above can ask for a hair more source than exists — raise the
+  // scale floor rather than let drawImage sample past the bitmap edge.
+  const minScale = Math.max(L.crop.outW / L.imageBitmap.width, L.crop.outH / L.imageBitmap.height);
+  if (L.crop.scale < minScale) L.crop.scale = minScale;
   clampOffsetFor({ bitmap: L.imageBitmap, crop: L.crop });
+  L.frame = {
+    canvasW, canvasH,
+    photoX: oL ? l : 0, photoY: oT ? t : 0,
+    photoW: L.crop.outW, photoH: L.crop.outH,
+    t, r, btm, l, oT, oR, oB, oL,
+    color: bd.color || '#ffffff', any: t + r + btm + l > 0,
+  };
+  return L.frame;
+}
+
+function layoutFrame() { return L.frame || refreshLayoutFrame() || {
+  canvasW: 1, canvasH: 1, photoX: 0, photoY: 0, photoW: 1, photoH: 1,
+  t: 0, r: 0, btm: 0, l: 0, oT: false, oR: false, oB: false, oL: false,
+  color: '#ffffff', any: false,
+}; }
+
+// Border/ratio changed: re-derive the frame, then push the new photo ratio
+// into whichever surface is live (crop stage or layout stage).
+function applyFrameChange() {
+  refreshLayoutFrame();
   if (CROPX && CROPX.crop === L.crop && currentStage === 'crop') {
-    CROPX.bitmap = L.imageBitmap;
+    CROPX.aspect = photoAspect();
     sizeCropCanvas(); drawCropViewport();
   } else if (L.cropApplied) {
     renderLayoutAll();
@@ -2496,29 +2575,43 @@ function sizeLayoutStage() {
   const area = document.getElementById('canvas-area');
   const aw = area.clientWidth - 48;
   const ah = area.clientHeight - 130;
-  const { outW, outH } = L.crop;
-  const bp = layoutBorder();
-  const totalW = outW + (bp.oL ? bp.l : 0) + (bp.oR ? bp.r : 0);
-  const totalH = outH + (bp.oT ? bp.t : 0) + (bp.oB ? bp.btm : 0);
-  const ratio = totalW / totalH;
+  const f = layoutFrame();
+  const ratio = f.canvasW / f.canvasH;
   let vW = aw, vH = aw / ratio;
   if (vH > ah) { vH = ah; vW = ah * ratio; }
   LV.TW = Math.floor(vW); LV.TH = Math.floor(vH);
-  LV.k = LV.TW / totalW;
-  LV.W = outW * LV.k; LV.H = outH * LV.k;   // image-area display dims
+  LV.k = LV.TW / f.canvasW;
   const frame = document.getElementById('layout-frame');
   frame.style.width = LV.TW + 'px'; frame.style.height = LV.TH + 'px';
-  // editor + guides track the IMAGE area — block % coords stay photo-relative
-  const ox = bp.oL ? bp.l * LV.k : 0;
-  const oy = bp.oT ? bp.t * LV.k : 0;
+  // Editor + guides cover the WHOLE canvas — block % coords are canvas-relative,
+  // so a caption can live in the matte, in the photo, or straddle the seam.
   ['layout-editor', 'layout-guides'].forEach(id => {
     const el = document.getElementById(id);
     el.style.inset = '';
-    el.style.left = ox + 'px'; el.style.top = oy + 'px';
-    el.style.width = LV.W + 'px'; el.style.height = LV.H + 'px';
+    el.style.left = '0px'; el.style.top = '0px';
+    el.style.width = LV.TW + 'px'; el.style.height = LV.TH + 'px';
   });
-  document.getElementById('layout-dim').textContent = `${Math.round(totalW)} × ${Math.round(totalH)}px`;
+  document.getElementById('layout-dim').textContent = `${f.canvasW} × ${f.canvasH}px`;
   drawLayoutBg();
+}
+
+// Paints canvas → matte → photo → inset masks. Shared by the preview (scaled
+// by k) and the export (k = 1), so the two can't diverge.
+function paintLayoutFrame(ctx, f, photo, k) {
+  const px = n => Math.round(n * k);
+  if (f.any) {
+    ctx.fillStyle = f.color;
+    ctx.fillRect(0, 0, px(f.canvasW), px(f.canvasH));
+  }
+  const ox = px(f.photoX), oy = px(f.photoY);
+  ctx.drawImage(photo, ox, oy);
+  if (!f.any) return;
+  const iw = photo.width, ih = photo.height;
+  ctx.fillStyle = f.color;
+  if (!f.oT && f.t)   ctx.fillRect(ox, oy, iw, px(f.t));
+  if (!f.oB && f.btm) ctx.fillRect(ox, oy + ih - px(f.btm), iw, px(f.btm));
+  if (!f.oL && f.l)   ctx.fillRect(ox, oy, px(f.l), ih);
+  if (!f.oR && f.r)   ctx.fillRect(ox + iw - px(f.r), oy, px(f.r), ih);
 }
 
 function drawLayoutBg() {
@@ -2527,38 +2620,16 @@ function drawLayoutBg() {
   c.width = Math.round(LV.TW * dpr); c.height = Math.round(LV.TH * dpr);
   c.style.width = LV.TW + 'px'; c.style.height = LV.TH + 'px';
   const ctx = c.getContext('2d');
-  const bp = layoutBorder();
+  const f = layoutFrame();
   const k = LV.k * dpr;   // device px per output px
-  const bg = drawImageBgCanvas(L.crop.outW * k, L.crop.outH * k, L.blur * k);
-  if (!bp.any) { ctx.drawImage(bg, 0, 0); return; }
-  // Fill the whole canvas with the border color, place the image at its
-  // (possibly offset) position, then mask inset edges over the image.
-  const ox = Math.round((bp.oL ? bp.l : 0) * k);
-  const oy = Math.round((bp.oT ? bp.t : 0) * k);
-  ctx.fillStyle = bp.color;
-  ctx.fillRect(0, 0, c.width, c.height);
-  ctx.drawImage(bg, ox, oy);
-  const iw = bg.width, ih = bg.height;
-  if (!bp.oT && bp.t)   ctx.fillRect(ox, oy, iw, Math.round(bp.t * k));
-  if (!bp.oB && bp.btm) ctx.fillRect(ox, oy + ih - Math.round(bp.btm * k), iw, Math.round(bp.btm * k));
-  if (!bp.oL && bp.l)   ctx.fillRect(ox, oy, Math.round(bp.l * k), ih);
-  if (!bp.oR && bp.r)   ctx.fillRect(ox + iw - Math.round(bp.r * k), oy, Math.round(bp.r * k), ih);
+  paintLayoutFrame(ctx, f, drawImageBgCanvas(f.photoW * k, f.photoH * k, L.blur * k), k);
 }
 
 window.setBorderProp = (key, val) => {
   L.border[key] = val;
   if (key !== 'color') document.getElementById('lay-border-' + key + '-val').textContent = val + '%';
   saveLayoutSettings();
-  if (L.border.preCrop) { rebuildLayoutSource(); refreshLayoutCropAfterSourceChange(); }
-  else if (L.cropApplied) renderLayoutAll();
-};
-
-window.setBorderPreCrop = on => {
-  L.border.preCrop = !!on;
-  updateBorderSideButtons();
-  saveLayoutSettings();
-  rebuildLayoutSource();
-  refreshLayoutCropAfterSourceChange();
+  applyFrameChange();   // a width can move the OUT reserve and reshape the frame
 };
 
 window.toggleBorderSide = side => {
@@ -2566,7 +2637,7 @@ window.toggleBorderSide = side => {
   L.border.outside[side] = !L.border.outside[side];
   updateBorderSideButtons();
   saveLayoutSettings();
-  if (L.cropApplied) renderLayoutAll();   // geometry change
+  applyFrameChange();   // IN↔OUT changes what the frame reserves
 };
 
 function updateBorderSideButtons() {
@@ -2575,31 +2646,39 @@ function updateBorderSideButtons() {
     const out = !!(L.border.outside && L.border.outside[s]);
     btn.textContent = out ? 'OUT' : 'IN';
     btn.classList.toggle('out', out);
-    btn.style.display = L.border.preCrop ? 'none' : '';   // IN/OUT is a post-crop concept
   });
 }
 
 function renderLayoutAll() {
+  refreshLayoutFrame();
   sizeLayoutStage();
   renderLayoutBlocks();
   updatePropsPanel();
 }
 
+// Block space — every block coord (x/y/w/sizePct) and margin is a % of the
+// FULL output canvas, matte included.
+function blockSpace() {
+  const f = layoutFrame();
+  return { W: f.canvasW, H: f.canvasH };
+}
+
 // ══════════════════════════════════════════
 // LAYOUT — margins & snapping
 // ══════════════════════════════════════════
-// Margin is % of image width; the vertical margin converts through the aspect
-// ratio so all four margins are equal in pixels. Negative widens the range.
+// Margin is % of canvas width; the vertical margin converts through the canvas
+// aspect ratio so all four margins are equal in pixels. Negative widens the range.
 function layoutMargins() {
+  const { W, H } = blockSpace();
   const mX = L.marginPct;
-  const mY = L.marginPct * L.crop.outW / L.crop.outH;
+  const mY = L.marginPct * W / H;
   return { mX, mY };
 }
 
 function blockHeightPct(b) {
-  const { outW, outH } = L.crop;
-  if (b.type === 'image') return (b.w / 100 * outW / b.aspect) / outH * 100;
-  return measureWrap(textSpec(b, outW)).totalHPx / outH * 100;
+  const { W, H } = blockSpace();
+  if (b.type === 'image') return (b.w / 100 * W / b.aspect) / H * 100;
+  return measureWrap(textSpec(b, W)).totalHPx / H * 100;
 }
 
 // Hard-clamps a proposed move to the margin box, then snaps edges/centers to
@@ -2611,8 +2690,8 @@ function applyMoveConstraints(b, x, y, snapAllowed) {
   y = Math.max(mY, Math.min(100 - mY - bh, y));
   const guides = { v: null, h: null };
   if (L.snap && snapAllowed) {
-    const thX = 6 / LV.W * 100;   // ~6 display px, in stage %
-    const thY = 6 / LV.H * 100;
+    const thX = 6 / LV.TW * 100;   // ~6 display px, in stage %
+    const thY = 6 / LV.TH * 100;
     if (Math.abs(x - mX) < thX)                       { x = mX;               guides.v = mX; }
     else if (Math.abs(x + bw - (100 - mX)) < thX)     { x = 100 - mX - bw;    guides.v = 100 - mX; }
     else if (Math.abs(x + bw / 2 - 50) < thX)         { x = 50 - bw / 2;      guides.v = 50; }
@@ -2630,8 +2709,8 @@ function applyResizeSnap(d, g, snapAllowed) {
   const guides = { v: null, h: null };
   if (!L.snap || !snapAllowed) return { g, guides };
   const { mX, mY } = layoutMargins();
-  const thX = 6 / LV.W * 100;
-  const thY = 6 / LV.H * 100;
+  const thX = 6 / LV.TW * 100;
+  const thY = 6 / LV.TH * 100;
   const isCorner = d.h !== 'e' && d.h !== 'w';
   const movingRight = d.h === 'e' || d.h === 'ne' || d.h === 'se';
 
@@ -2655,7 +2734,8 @@ function applyResizeSnap(d, g, snapAllowed) {
   // or square images. Width follows the snapped height through the aspect.
   let vCand = null;
   if (isCorner && d.b.type === 'image' && d.b.aspect) {
-    const hFactor = L.crop.outW / (d.b.aspect * L.crop.outH);   // heightPct = w * hFactor
+    const bs = blockSpace();
+    const hFactor = bs.W / (d.b.aspect * bs.H);   // heightPct = w * hFactor
     const bottom = d.b.y + g.w * hFactor;
     const snapY = pos => {
       if (Math.abs(pos - (100 - mY)) < thY) return 100 - mY;
@@ -2842,7 +2922,7 @@ function renderLayoutBlocks() {
   const ed = document.getElementById('layout-editor');
   ed.innerHTML = '';
   if (!L.cropApplied) { renderLayoutBlockList(); return; }
-  const outW = L.crop.outW;
+  const outW = blockSpace().W;
   L.blocks.forEach((b, zi) => {
     const el = document.createElement('div');
     el.className = 'lblock' + (L.selectedId === b.id ? ' selected' : '');
@@ -3026,7 +3106,7 @@ function startInlineEdit(b) {
   if (!el || EDITING) return;
   L.selectedId = b.id;
   el.style.visibility = 'hidden';
-  const spec = textSpec(b, L.crop.outW);
+  const spec = textSpec(b, blockSpace().W);
   const m = measureWrap(spec);
   const ta = document.createElement('textarea');
   ta.className = 'lblock-edit';
@@ -3082,8 +3162,9 @@ function calcResize(d, dx) {
 }
 
 function reflowTextEl(el, b, wPct) {
-  const spec = textSpec(b, L.crop.outW);
-  spec.maxWpx = wPct / 100 * L.crop.outW;
+  const W = blockSpace().W;
+  const spec = textSpec(b, W);
+  spec.maxWpx = wPct / 100 * W;
   const m = measureWrap(spec);
   buildTextLines(el.querySelector('.lblock-lines'), b, m, spec.sizePx);
 }
@@ -3153,7 +3234,7 @@ function initLayoutEditor() {
         if (d.h === 'e' || d.h === 'w') {
           reflowTextEl(d.el, d.b, g.w);           // live re-wrap at new width
         } else {
-          const sizePx = g.size / 100 * L.crop.outW * LV.k;
+          const sizePx = g.size / 100 * blockSpace().W * LV.k;
           d.el.querySelectorAll('.lblock-line').forEach(ld => {
             ld.style.fontSize = sizePx + 'px';
             ld.style.lineHeight = (sizePx * d.b.lineHeight) + 'px';
@@ -3223,26 +3304,13 @@ async function exportLayoutImage(format) {
       if (!ok) toast(`${fam} unavailable — exporting with fallback`, 'error');
     }
   }
-  const { outW, outH } = L.crop;
-  const bp = layoutBorder();
-  const totalW = Math.round(outW + (bp.oL ? bp.l : 0) + (bp.oR ? bp.r : 0));
-  const totalH = Math.round(outH + (bp.oT ? bp.t : 0) + (bp.oB ? bp.btm : 0));
-  const ox = bp.oL ? Math.round(bp.l) : 0;
-  const oy = bp.oT ? Math.round(bp.t) : 0;
+  const f = refreshLayoutFrame();
+  const outW = f.canvasW, outH = f.canvasH;   // block space === the full canvas
   const c = document.createElement('canvas');
-  c.width = totalW; c.height = totalH;
+  c.width = outW; c.height = outH;
   const ctx = c.getContext('2d');
-  if (bp.any) { ctx.fillStyle = bp.color; ctx.fillRect(0, 0, totalW, totalH); }
-  ctx.drawImage(drawImageBgCanvas(outW, outH, L.blur), ox, oy);
-  if (bp.any) {
-    ctx.fillStyle = bp.color;
-    if (!bp.oT && bp.t)   ctx.fillRect(ox, oy, outW, Math.round(bp.t));
-    if (!bp.oB && bp.btm) ctx.fillRect(ox, oy + outH - Math.round(bp.btm), outW, Math.round(bp.btm));
-    if (!bp.oL && bp.l)   ctx.fillRect(ox, oy, Math.round(bp.l), outH);
-    if (!bp.oR && bp.r)   ctx.fillRect(ox + outW - Math.round(bp.r), oy, Math.round(bp.r), outH);
-  }
+  paintLayoutFrame(ctx, f, drawImageBgCanvas(f.photoW, f.photoH, L.blur), 1);
   ctx.save();
-  ctx.translate(ox, oy);   // blocks stay photo-relative
   for (const b of L.blocks) {
     ctx.save();
     ctx.globalAlpha = (b.opacity ?? 100) / 100;
@@ -3355,7 +3423,6 @@ function loadLayoutStorage() {
     if (saved.isBlank !== undefined) L.isBlank = !!saved.isBlank;
     if (saved.canvasColor) L.canvasColor = saved.canvasColor;
     document.getElementById('lay-canvas-color').value = L.canvasColor;
-    document.getElementById('lay-border-precrop').checked = !!L.border.preCrop;
     updateBorderSideButtons();
     document.getElementById('lay-border-color').value = L.border.color;
     document.getElementById('lay-blur-slider').value = L.blur;
