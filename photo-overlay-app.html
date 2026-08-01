@@ -179,6 +179,16 @@
   .preset-del { font-size: 16px; color: var(--text3); cursor: pointer; padding: 0 2px; transition: color 0.15s; background: none; border: none; line-height: 1; }
   .preset-del:hover { color: var(--red); }
   .preset-empty { font-size: 13px; color: var(--text3); font-style: italic; padding: 8px 0; font-family: 'DM Mono', monospace; }
+  /* Templates stack name / summary / actions — five controls won't fit on one row */
+  .tpl-item { flex-direction: column; align-items: stretch; gap: 5px; }
+  .tpl-item .preset-name { flex: none; font-size: 13px; color: var(--text); }
+  .tpl-meta { font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; }
+  .tpl-actions { display: flex; align-items: center; gap: 5px; margin-top: 1px; }
+  .tpl-actions .tpl-alt { color: var(--text2); background: none; border-color: var(--border2); }
+  .tpl-actions .tpl-alt:hover { background: var(--surface3); color: var(--text); }
+  .tpl-ico { font-size: 13px; padding: 2px 5px; margin-left: auto; }
+  .tpl-ico + .tpl-ico { margin-left: 0; }
+  .tpl-rename { width: 100%; font-size: 13px; font-family: 'DM Mono', monospace; color: var(--text); background: var(--surface3); border: 1px solid var(--accent); border-radius: 3px; padding: 3px 6px; outline: none; }
 
   .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border-radius: var(--radius); font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; transition: all 0.15s; border: none; white-space: nowrap; }
   .btn-ghost { background: transparent; border: 1.5px solid var(--border2); color: var(--text2); }
@@ -702,6 +712,15 @@
             <button class="btn btn-ghost btn-sm" onclick="addCustomFont()">Add</button>
           </div>
           <div class="preset-list" id="custom-font-list" style="margin-top:8px;margin-bottom:0;"><div class="preset-empty">No custom fonts yet</div></div>
+        </div>
+        <div class="section">
+          <div class="section-label">Templates</div>
+          <div class="btn-row" style="margin-bottom:10px;">
+            <button class="btn btn-ghost btn-sm" onclick="saveLayoutTemplate()" title="Save the current frame and blocks as a template"><span class="btn-ico">✚</span>Save current</button>
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('tpl-import-input').click()" title="Import a template .json"><span class="btn-ico">↥</span>Import</button>
+          </div>
+          <input type="file" id="tpl-import-input" accept="application/json,.json" style="display:none;">
+          <div class="preset-list" id="template-list"><div class="preset-empty">No templates yet</div></div>
         </div>
         <div class="section">
           <div class="section-label">Blocks</div>
@@ -2054,25 +2073,33 @@ window.exportSettings = async (format) => {
     else data.presets.forEach((p,i) => { md += `### Preset ${i+1}\n\n${p.text}\n\n`; });
     content = md; mime = 'text/markdown'; ext = 'md'; description = 'Markdown File';
   }
+  await saveTextFile(content, mime, ext, 'framedata-settings', description, 'Settings');
+};
+
+// Shared text-file download: native save picker where available, anchor
+// fallback otherwise. Used by settings export and template export.
+async function saveTextFile(content, mime, ext, filenameBase, description, label) {
   const blob = new Blob([content], { type: mime });
+  const filename = `${filenameBase}.${ext}`;
   if (window.showSaveFilePicker) {
     try {
       const handle = await window.showSaveFilePicker({
-        suggestedName: `framedata-settings.${ext}`,
-        types: [{ description, accept: { [mime]: ['.'+ext] } }],
+        suggestedName: filename,
+        types: [{ description, accept: { [mime]: ['.' + ext] } }],
       });
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
-      toast(`Settings saved as .${ext}`, 'success');
+      toast(`${label} saved as .${ext}`, 'success');
       return;
     } catch (e) { if (e.name === 'AbortError') return; }
   }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `framedata-settings.${ext}`; a.click();
-  toast(`Settings exported as .${ext}`, 'success');
-};
+  a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast(`${label} exported as .${ext}`, 'success');
+}
 
 
 // ══════════════════════════════════════════
@@ -2887,6 +2914,346 @@ window.useLibraryImage = i => {
 };
 window.deleteLibraryImage = i => { IMGLIB.splice(i, 1); saveImgLib(); renderImgLib(); };
 
+// ══════════════════════════════════════════
+// LAYOUT TEMPLATES (framedata-templates)
+// ══════════════════════════════════════════
+// A template is a saved *look*: the frame (ratio, border/matte, margin, photo
+// effects) plus the block set. Two ways to apply one — USE restores everything
+// so the look reproduces exactly; BLOCKS drops only the blocks onto whatever
+// frame you are already in. Since M5 made block coords canvas-relative, a
+// template built around a chin needs its frame to land where it was designed.
+const TEMPLATE_FORMAT = 1;
+const TPL_MAX_BLOCKS = 200;
+const TPL_IMG_MAX = 1500000;      // same per-image cap as saveLayoutSettings
+let TEMPLATES = [];
+
+function loadTemplates() {
+  try { TEMPLATES = JSON.parse(localStorage.getItem('framedata-templates') || '[]'); }
+  catch { TEMPLATES = []; }
+  if (!Array.isArray(TEMPLATES)) TEMPLATES = [];
+  renderTemplateList();
+}
+
+// Rolls the in-memory list back when the write is rejected, so a quota failure
+// can't leave the UI listing a template that was never stored.
+function saveTemplates(prev) {
+  try {
+    localStorage.setItem('framedata-templates', JSON.stringify(TEMPLATES));
+    return true;
+  } catch (e) {
+    if (prev) { TEMPLATES = prev; renderTemplateList(); }
+    toast('Template storage is full — delete one, or export it to .json instead', 'error');
+    return false;
+  }
+}
+
+function uniqueTemplateName(name, exceptId) {
+  const taken = new Set(TEMPLATES.filter(t => t.id !== exceptId).map(t => t.name));
+  if (!taken.has(name)) return name;
+  let n = 2;
+  while (taken.has(`${name} (${n})`)) n++;
+  return `${name} (${n})`;
+}
+
+function templateDefaultName() {
+  const t = L.blocks.find(b => b.type === 'text' && (b.text || '').trim());
+  const s = t ? t.text.trim().split('\n')[0].slice(0, 32).trim() : '';
+  return s || `Template ${TEMPLATES.length + 1}`;
+}
+
+function newTemplateId() {
+  return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+// A one-line summary of what the template will do to your canvas.
+function templateSummary(tpl) {
+  const parts = [];
+  const f = tpl.frame || {};
+  if (f.cropRatio) parts.push(f.cropRatio === 'original' ? 'original' : f.cropRatio);
+  const b = f.border || {};
+  const o = b.outside || {};
+  const outs = ['top', 'right', 'bottom', 'left'].filter(s => o[s] && (b[s] || 0) > 0);
+  if (outs.length === 1 && outs[0] === 'bottom') parts.push(`chin ${b.bottom}%`);
+  else if (outs.length) parts.push(`matte ${outs.length === 4 ? 'all' : outs.join('/')}`);
+  const n = (tpl.blocks || []).length;
+  parts.push(`${n} block${n === 1 ? '' : 's'}`);
+  return parts.join(' · ');
+}
+
+function renderTemplateList() {
+  const list = document.getElementById('template-list');
+  if (!list) return;
+  if (!TEMPLATES.length) {
+    list.innerHTML = '<div class="preset-empty">No templates yet</div>';
+    return;
+  }
+  list.innerHTML = TEMPLATES.map(t => `
+    <div class="preset-item tpl-item" data-tpl="${escapeHtml(t.id)}">
+      <span class="preset-name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span>
+      <span class="tpl-meta">${escapeHtml(templateSummary(t))}</span>
+      <div class="tpl-actions">
+        <button class="preset-use" onclick="useTemplate('${escapeHtml(t.id)}',false)" title="Restore blocks, border and ratio">Use</button>
+        <button class="preset-use tpl-alt" onclick="useTemplate('${escapeHtml(t.id)}',true)" title="Drop only the blocks onto the current frame">Blocks</button>
+        <button class="preset-del tpl-ico" onclick="startTemplateRename('${escapeHtml(t.id)}')" title="Rename">✎</button>
+        <button class="preset-del tpl-ico" onclick="exportTemplate('${escapeHtml(t.id)}')" title="Export as .json">↓</button>
+        <button class="preset-del tpl-ico" onclick="deleteTemplate('${escapeHtml(t.id)}')" title="Delete">×</button>
+      </div>
+    </div>`).join('');
+}
+
+window.saveLayoutTemplate = () => {
+  if (!L.blocks.length) { toast('Add some blocks first', 'error'); return; }
+  let skipped = 0;
+  const blocks = L.blocks
+    .filter(b => {
+      if (b.type === 'image' && b.src && b.src.length > TPL_IMG_MAX) { skipped++; return false; }
+      return true;
+    })
+    .map(b => JSON.parse(JSON.stringify(b)));
+  const prev = TEMPLATES.slice();
+  TEMPLATES.push({
+    v: TEMPLATE_FORMAT,
+    id: newTemplateId(),
+    name: uniqueTemplateName(templateDefaultName()),
+    created: new Date().toISOString(),
+    frame: {
+      cropRatio: L.cropRatio,
+      border: JSON.parse(JSON.stringify(L.border)),
+      marginPct: L.marginPct, blur: L.blur, darken: L.darken,
+    },
+    blocks,
+  });
+  if (!saveTemplates(prev)) return;
+  renderTemplateList();
+  toast(skipped
+    ? `Template saved — ${skipped} oversized image${skipped > 1 ? 's' : ''} omitted`
+    : 'Template saved', skipped ? 'error' : 'success');
+};
+
+// Blocks always get fresh ids so an applied template can never collide with
+// ids already in play.
+function adoptTemplateBlocks(tpl) {
+  L.blocks = (tpl.blocks || []).map(b =>
+    Object.assign(JSON.parse(JSON.stringify(b)), { id: 'b' + (L.nextId++) }));
+  L.selectedId = null;
+}
+
+window.useTemplate = (id, blocksOnly) => {
+  const tpl = TEMPLATES.find(t => t.id === id);
+  if (!tpl) return;
+  if (!L.cropApplied) { toast('Load & crop an image first', 'error'); return; }
+  const replaced = L.blocks.length;
+  if (!blocksOnly && tpl.frame) {
+    const f = tpl.frame;
+    if (f.marginPct !== undefined) L.marginPct = f.marginPct;
+    if (f.blur !== undefined) L.blur = f.blur;
+    if (f.darken !== undefined) L.darken = f.darken;
+    if (f.border) L.border = JSON.parse(JSON.stringify(f.border));
+    const ratioChanged = f.cropRatio && f.cropRatio !== L.cropRatio;
+    if (f.cropRatio) L.cropRatio = f.cropRatio;
+    adoptTemplateBlocks(tpl);
+    syncLayoutPanel();
+    // A new ratio re-derives the photo box, so re-centre the crop on it
+    if (ratioChanged && L.imageBitmap) {
+      if (L.isBlank) makeBlankSource();
+      else resetCropState({ bitmap: L.imageBitmap, aspect: photoAspect(), crop: L.crop });
+    }
+    applyFrameChange();
+  } else {
+    adoptTemplateBlocks(tpl);
+  }
+  saveLayoutSettings();
+  renderLayoutAll();
+  toast(`Applied "${tpl.name}"` +
+    (replaced ? ` — ${replaced} block${replaced > 1 ? 's' : ''} replaced` : ''), 'success');
+};
+
+// Inline rename — the app has no dialogs, so the name swaps for an input.
+window.startTemplateRename = id => {
+  const tpl = TEMPLATES.find(t => t.id === id);
+  const row = document.querySelector(`.preset-item[data-tpl="${id}"]`);
+  const span = row && row.querySelector('.preset-name');
+  if (!tpl || !span) return;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'tpl-rename';
+  input.value = tpl.name;
+  input.maxLength = 60;
+  span.replaceWith(input);
+  input.focus(); input.select();
+  let done = false;
+  const commit = save => {
+    if (done) return;
+    done = true;
+    const v = input.value.trim();
+    if (save && v && v !== tpl.name) {
+      const prev = TEMPLATES.map(t => Object.assign({}, t));
+      tpl.name = uniqueTemplateName(v, tpl.id);
+      if (!saveTemplates(prev)) return;
+    }
+    renderTemplateList();
+  };
+  input.addEventListener('blur', () => commit(true));
+  input.addEventListener('keydown', e => {
+    e.stopPropagation();                       // don't reach the Delete/Escape handler
+    if (e.key === 'Enter') { e.preventDefault(); commit(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); commit(false); }
+  });
+};
+
+window.deleteTemplate = id => {
+  const i = TEMPLATES.findIndex(t => t.id === id);
+  if (i < 0) return;
+  const prev = TEMPLATES.slice();
+  const [gone] = TEMPLATES.splice(i, 1);
+  if (!saveTemplates(prev)) return;
+  renderTemplateList();
+  toast(`Deleted "${gone.name}"`, 'success');
+};
+
+window.exportTemplate = async id => {
+  const tpl = TEMPLATES.find(t => t.id === id);
+  if (!tpl) return;
+  const payload = {
+    kind: 'photo-overlay-layout-template', v: TEMPLATE_FORMAT,
+    exportedAt: new Date().toISOString(),
+    name: tpl.name, frame: tpl.frame, blocks: tpl.blocks,
+  };
+  const safe = tpl.name.replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || 'template';
+  await saveTextFile(JSON.stringify(payload, null, 2), 'application/json', 'json',
+    `${safe}-template`, 'JSON File', 'Template');
+};
+
+// ── Import validation ─────────────────────────────────────────────────────
+// An imported .json is UNTRUSTED. Block src ends up in img.src and in a CSS
+// mask-image url(), so only inline base64 image data URLs get through — the
+// strict charset also means a src can't break out of the CSS string. Unknown
+// keys are dropped rather than spread, and every number is clamped.
+const TPL_SRC_RE = /^data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);base64,[A-Za-z0-9+/]+={0,2}$/i;
+
+function tplNum(v, d, lo, hi) {
+  const n = (typeof v === 'number' && isFinite(v)) ? v : d;
+  return Math.min(hi, Math.max(lo, n));
+}
+function tplColor(v, d) {
+  return (typeof v === 'string' && /^#[0-9a-f]{3,8}$/i.test(v)) ? v : d;
+}
+function tplStr(v, d, max) {
+  return (typeof v === 'string' && v) ? v.slice(0, max) : d;
+}
+
+function sanitizeTemplateBlock(b) {
+  if (!b || typeof b !== 'object') return null;
+  const base = {
+    type: b.type,
+    x: tplNum(b.x, 0, -500, 500),
+    y: tplNum(b.y, 0, -500, 500),
+    w: tplNum(b.w, 20, 0.5, 500),
+    opacity: tplNum(b.opacity, 100, 0, 100),
+  };
+  if (b.type === 'text') {
+    const f = b.font || {}, s = b.shadow || {};
+    return Object.assign(base, {
+      text: tplStr(b.text, '', 5000),
+      font: {
+        family: tplStr(f.family, 'Helvetica Neue', 80),
+        weight: tplNum(f.weight, 400, 100, 900),
+        italic: !!f.italic,
+      },
+      sizePct: tplNum(b.sizePct, 4, 0.1, 200),
+      lineHeight: tplNum(b.lineHeight, 1.25, 0.5, 4),
+      letterSpacing: tplNum(b.letterSpacing, 0, -1, 2),
+      align: ['left', 'center', 'right'].includes(b.align) ? b.align : 'left',
+      color: tplColor(b.color, '#ffffff'),
+      shadow: {
+        enabled: !!s.enabled,
+        blur: tplNum(s.blur, 12, 0, 200),
+        opacity: tplNum(s.opacity, 70, 0, 100),
+        x: tplNum(s.x, 0, -200, 200),
+        y: tplNum(s.y, 2, -200, 200),
+      },
+    });
+  }
+  if (b.type === 'image') {
+    if (typeof b.src !== 'string' || !TPL_SRC_RE.test(b.src)) return null;
+    if (b.src.length > TPL_IMG_MAX) return null;
+    const fl = b.filters || {}, ti = b.tint || {};
+    return Object.assign(base, {
+      name: tplStr(b.name, 'Image', 80),
+      src: b.src,
+      aspect: tplNum(b.aspect, 1, 0.01, 100),
+      isSvg: !!b.isSvg,
+      filters: {
+        invert: tplNum(fl.invert, 0, 0, 100),
+        grayscale: tplNum(fl.grayscale, 0, 0, 100),
+        brightness: tplNum(fl.brightness, 100, 0, 400),
+        contrast: tplNum(fl.contrast, 100, 0, 400),
+      },
+      tint: { enabled: !!ti.enabled, color: tplColor(ti.color, '#ffffff') },
+    });
+  }
+  return null;
+}
+
+function sanitizeTemplateFrame(f) {
+  if (!f || typeof f !== 'object') return null;
+  const b = f.border || {}, o = b.outside || {};
+  const edge = s => tplNum(b[s], 0, 0, 25);
+  return {
+    cropRatio: ['4:5', '1:1', 'original'].includes(f.cropRatio) ? f.cropRatio : '4:5',
+    border: {
+      top: edge('top'), right: edge('right'), bottom: edge('bottom'), left: edge('left'),
+      outside: { top: !!o.top, right: !!o.right, bottom: !!o.bottom, left: !!o.left },
+      color: tplColor(b.color, '#ffffff'),
+    },
+    marginPct: tplNum(f.marginPct, 5, -50, 50),
+    blur: tplNum(f.blur, 0, 0, 200),
+    darken: tplNum(f.darken, 0, 0, 100),
+  };
+}
+
+// Returns a clean template, or a string describing why the payload was rejected.
+function parseTemplateJson(text) {
+  let raw;
+  try { raw = JSON.parse(text); } catch { return 'not valid JSON'; }
+  if (!raw || typeof raw !== 'object') return 'not a template file';
+  if (raw.kind && raw.kind !== 'photo-overlay-layout-template') return 'not a layout template';
+  if (!Array.isArray(raw.blocks)) return 'no blocks in the file';
+  if (raw.blocks.length > TPL_MAX_BLOCKS) return `too many blocks (max ${TPL_MAX_BLOCKS})`;
+  const blocks = raw.blocks.map(sanitizeTemplateBlock).filter(Boolean);
+  if (!blocks.length) return 'no usable blocks (images must be inline base64 data URLs)';
+  return {
+    v: TEMPLATE_FORMAT,
+    id: newTemplateId(),
+    name: uniqueTemplateName(tplStr(raw.name, 'Imported template', 60)),
+    created: new Date().toISOString(),
+    frame: sanitizeTemplateFrame(raw.frame),
+    blocks,
+    dropped: raw.blocks.length - blocks.length,
+  };
+}
+
+window.importTemplateFile = async file => {
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const result = parseTemplateJson(text);
+    if (typeof result === 'string') { toast(`Import failed — ${result}`, 'error'); return; }
+    const dropped = result.dropped;
+    delete result.dropped;
+    const prev = TEMPLATES.slice();
+    TEMPLATES.push(result);
+    if (!saveTemplates(prev)) return;
+    renderTemplateList();
+    toast(dropped
+      ? `Imported "${result.name}" — ${dropped} block${dropped > 1 ? 's' : ''} rejected`
+      : `Imported "${result.name}"`, dropped ? 'error' : 'success');
+  } catch (e) {
+    console.warn('template import failed:', e);
+    toast('Could not read that file', 'error');
+  }
+};
+
 // Same string drives CSS filter (DOM preview) and ctx.filter (export) —
 // Chromium supports identical syntax in both, so filters stay WYSIWYG.
 function imageFilterString(b) {
@@ -3416,25 +3783,31 @@ function loadLayoutStorage() {
         L.border.outside = { top: v, right: v, bottom: v, left: v };
       }
     }
-    ['top', 'right', 'bottom', 'left'].forEach(k => {
-      document.getElementById('lay-border-' + k).value = L.border[k];
-      document.getElementById('lay-border-' + k + '-val').textContent = L.border[k] + '%';
-    });
     if (saved.isBlank !== undefined) L.isBlank = !!saved.isBlank;
     if (saved.canvasColor) L.canvasColor = saved.canvasColor;
-    document.getElementById('lay-canvas-color').value = L.canvasColor;
-    updateBorderSideButtons();
-    document.getElementById('lay-border-color').value = L.border.color;
-    document.getElementById('lay-blur-slider').value = L.blur;
-    document.getElementById('lay-blur-val').textContent = L.blur + 'px';
-    document.getElementById('lay-darken-slider').value = L.darken;
-    document.getElementById('lay-darken-val').textContent = L.darken + '%';
-    document.getElementById('lay-margin').value = L.marginPct;
-    document.getElementById('lay-margin-val').textContent = L.marginPct + '%';
-    document.getElementById('lay-snap').checked = !!L.snap;
-    document.querySelectorAll('#lay-ratio-row .crop-btn').forEach(b =>
-      b.classList.toggle('active', b.dataset.ratio === L.cropRatio));
+    syncLayoutPanel();
   } catch (e) { console.warn('loadLayoutStorage error:', e); }
+}
+
+// Push L's frame/effect state out to the panel controls. Called after any
+// wholesale state change — storage restore, or applying a template.
+function syncLayoutPanel() {
+  ['top', 'right', 'bottom', 'left'].forEach(k => {
+    document.getElementById('lay-border-' + k).value = L.border[k];
+    document.getElementById('lay-border-' + k + '-val').textContent = L.border[k] + '%';
+  });
+  document.getElementById('lay-canvas-color').value = L.canvasColor;
+  updateBorderSideButtons();
+  document.getElementById('lay-border-color').value = L.border.color;
+  document.getElementById('lay-blur-slider').value = L.blur;
+  document.getElementById('lay-blur-val').textContent = L.blur + 'px';
+  document.getElementById('lay-darken-slider').value = L.darken;
+  document.getElementById('lay-darken-val').textContent = L.darken + '%';
+  document.getElementById('lay-margin').value = L.marginPct;
+  document.getElementById('lay-margin-val').textContent = L.marginPct + '%';
+  document.getElementById('lay-snap').checked = !!L.snap;
+  document.querySelectorAll('#lay-ratio-row .crop-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.ratio === L.cropRatio));
 }
 
 function initLayoutMode() {
@@ -3452,6 +3825,10 @@ function initLayoutMode() {
     if (e.target.files[0]) addLogoBlock(e.target.files[0]);
     e.target.value = '';
   });
+  document.getElementById('tpl-import-input').addEventListener('change', e => {
+    if (e.target.files[0]) importTemplateFile(e.target.files[0]);
+    e.target.value = '';       // re-importing the same file must re-fire change
+  });
   window.addEventListener('keydown', e => {
     if (MODE !== 'layout' || EDITING) return;
     const tag = (e.target.tagName || '').toLowerCase();
@@ -3464,6 +3841,7 @@ function initLayoutMode() {
   populateFontSelect();      // re-populate after custom fonts restore
   renderCustomFontList();
   loadImgLib();
+  loadTemplates();
   if (L.isBlank) {           // blank-canvas compositions restore fully on reload
     makeBlankSource();
     document.getElementById('lay-recrop-btn').disabled = false;

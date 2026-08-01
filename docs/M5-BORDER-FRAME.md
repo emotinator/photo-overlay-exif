@@ -123,3 +123,85 @@ correctly on boot, and EXIF + Grid modes are unaffected.
 Border paints *under* blocks (unchanged). An IN matte therefore does not clip a
 block that overlaps it. If you'd rather an inset matte behave like a true window
 that crops everything, that's a one-line reorder in `paintLayoutFrame()`.
+
+---
+
+# M6 — Layout templates
+
+Save the current *look* — frame plus blocks — and reapply it later.
+
+## Shape
+
+Stored in `framedata-templates`, following the same pattern as the three
+existing collections (`framedata-presets`, `framedata-imagelib`, custom fonts):
+`loadTemplates()` / `saveTemplates()` / `renderTemplateList()` over `.preset-list`.
+
+```js
+{
+  v: 1, id: 't…', name: 'Polaroid w/ credit', created: '…',
+  frame: { cropRatio, border: {…, outside:{…}, color}, marginPct, blur, darken },
+  blocks: [ … ],
+}
+```
+
+`frame` carries blur/darken because they're part of the look (darken usually
+exists *to* make a caption legible). It does not carry `canvasColor` — that's a
+property of the source, not the layout.
+
+## Two ways to apply
+
+Since M5 made block coords canvas-relative, a template built around a chin needs
+its frame to land where it was designed — so applying offers both:
+
+- **USE** — restores blocks *and* frame. A ratio change re-derives the photo box
+  and re-centres the crop.
+- **BLOCKS** — drops only the blocks onto whatever frame you're already in.
+
+Applied blocks always get fresh ids, so a template can never collide with ids
+already in play.
+
+## Rename, delete, export, import
+
+Rename is inline — the name swaps for an input (Enter commits, Escape cancels),
+mirroring `startInlineEdit()`. The app has no `prompt()`/`confirm()`/`alert()`
+anywhere and this doesn't add one.
+
+Export writes a single self-contained `.json`; import reads one back, auto-
+suffixing on a name clash. Logo data URLs are inlined rather than referenced
+into the image collection, which is what makes an exported template usable on
+another machine.
+
+`saveTextFile()` was extracted from `exportSettings` so both share one download
+path (native save picker, anchor fallback).
+
+## Import is untrusted input
+
+An imported `.json` reaches `img.src` and a CSS `mask-image: url()`. So
+validation is a security boundary, not just shape-checking:
+
+- image `src` must match `^data:image/(png|jpeg|jpg|gif|webp|svg+xml);base64,[A-Za-z0-9+/]+={0,2}$`
+  — the strict base64 charset also means a src cannot break out of the CSS string
+- unknown keys are dropped rather than spread; every number is clamped
+- caps on block count (200) and per-image size (1.5MB, same as `saveLayoutSettings`)
+- `saveTemplates()` rolls the in-memory list back on `QuotaExceededError` so a
+  rejected write can't leave the UI listing a template that was never stored
+
+## Verification
+
+`docs/template-test.js` — 60 assertions, same extract-and-run-in-Node approach:
+name collisions and self-rename, default naming, fresh-id assignment and deep
+copy, summary formatting, **13 rejection cases** (`javascript:` src,
+`data:text/html`, remote URLs, a CSS-breakout src, protocol-relative, inline-SVG
+script payload, malformed JSON, oversized block lists), value clamping, and an
+export→import round-trip.
+
+Live pass on the throwaway origin: save, inline rename (Enter commits, Escape
+cancels), USE restoring 4:5 + 12% chin + panel sync over a deliberately wrecked
+canvas, BLOCKS leaving the frame untouched, export→import with auto-suffix, a
+hostile file rejected by the real handler, and survival across reload.
+
+## Flagged, not solved
+
+Applying a template replaces the current blocks with **no undo**. The app has no
+confirm dialogs and no undo stack, so the toast is explicit
+(`Applied "X" — 3 blocks replaced`) rather than inventing one.
