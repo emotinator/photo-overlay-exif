@@ -916,6 +916,13 @@
           </div>
         </div>
         <div class="section">
+          <div class="section-label">Export Size</div>
+          <div class="crop-toggle">
+            <button class="crop-btn active" id="grid-scale-full" onclick="setGridExportScale(1)">Full</button>
+            <button class="crop-btn" id="grid-scale-half" onclick="setGridExportScale(0.5)">½</button>
+          </div>
+        </div>
+        <div class="section">
           <div class="drop-text" style="text-align:left;">Click a cell to add or re-crop its image · drop multiple files anywhere to fill empty cells in order</div>
         </div>
       </div>
@@ -3916,6 +3923,7 @@ function ratioHF() { return (GRID_RATIOS[G.ratio] || GRID_RATIOS['1:1']).hf; }
 const G = {
   ratio: '1:1', count: 4, variant: 0,
   gutterPct: 1.5, gutterColor: '#ffffff',
+  exportScale: 1,  // 1 = full resolution, 0.5 = half size
   cells: [],       // sparse, index-aligned: { file, bitmap, crop, cropApplied, caption } — not persisted
   selCell: null,   // Cells-tab selection for per-cell caption editing
   caption: { enabled: false, text: '', family: 'Helvetica Neue', sizePct: 2.2, align: 'center', heightPct: 10 },
@@ -3970,6 +3978,12 @@ function gridExportWidth() {
   return Math.round(Math.max(1600, Math.min(4096, minW === Infinity ? 2048 : minW)));
 }
 
+// Actual output width: the export-size option scales the clamped full-res
+// width, so ½ really halves it instead of being caught by the 1600 floor.
+function gridExportWidthScaled() {
+  return Math.round(gridExportWidth() * G.exportScale);
+}
+
 function contrastColor(hex) {
   try {
     const n = parseInt(hex.slice(1), 16);
@@ -4016,6 +4030,16 @@ window.setGridGutter = v => {
 };
 window.setGridGutterColor = v => {
   G.gutterColor = v;
+  saveGridSettings();
+  renderGridAll();
+};
+function syncGridScaleButtons() {
+  document.getElementById('grid-scale-full').classList.toggle('active', G.exportScale === 1);
+  document.getElementById('grid-scale-half').classList.toggle('active', G.exportScale === 0.5);
+}
+window.setGridExportScale = v => {
+  G.exportScale = v;
+  syncGridScaleButtons();
   saveGridSettings();
   renderGridAll();
 };
@@ -4158,7 +4182,7 @@ function renderGridAll() {
   sizeGridStage();
   renderGridCellsDom();
   updateGridCellActions();
-  const ew = gridExportWidth();
+  const ew = gridExportWidthScaled();
   const capH = G.caption.enabled ? Math.round(G.caption.heightPct / 100 * ew) : 0;
   const eh = Math.round(ew * ratioHF() + capH);
   document.getElementById('grid-dim').textContent = `${ew} × ${eh}px export`;
@@ -4477,12 +4501,13 @@ function refitCellCrops() {
 async function exportGridImage(format) {
   const anyFilled = G.cells.some(c => c && c.bitmap);
   if (!anyFilled) { toast('Add at least one image to the grid', 'error'); return; }
-  const exportW = gridExportWidth();
+  const exportW = gridExportWidthScaled();
   const { rects, H } = gridGeometry(exportW);
   const capH = G.caption.enabled ? Math.round(G.caption.heightPct / 100 * exportW) : 0;
   const c = document.createElement('canvas');
   c.width = exportW; c.height = Math.round(H + capH);
   const ctx = c.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
   ctx.fillStyle = G.gutterColor;
   ctx.fillRect(0, 0, c.width, c.height);
   let empty = 0;
@@ -4522,7 +4547,7 @@ async function exportGridImage(format) {
       ctx.fillText(line, lx, by);
     });
   }
-  await saveCanvas(c, format, `grid_${G.count}up`);
+  await saveCanvas(c, format, `grid_${G.count}up${G.exportScale === 0.5 ? '_half' : ''}`);
 }
 
 // Per-cell caption at export resolution, clipped to its cell; mirrors the DOM
@@ -4568,6 +4593,7 @@ function saveGridSettings() {
     localStorage.setItem('framedata-grid', JSON.stringify({
       ratio: G.ratio, count: G.count, variant: G.variant,
       gutterPct: G.gutterPct, gutterColor: G.gutterColor, caption: G.caption,
+      exportScale: G.exportScale,
     }));
   } catch (e) { console.warn('grid save failed:', e); }
 }
@@ -4580,6 +4606,7 @@ function loadGridStorage() {
     if (saved.variant !== undefined && GRID_SPECS[G.count][saved.variant]) G.variant = saved.variant;
     if (saved.gutterPct !== undefined) G.gutterPct = saved.gutterPct;
     if (saved.gutterColor) G.gutterColor = saved.gutterColor;
+    if (saved.exportScale === 1 || saved.exportScale === 0.5) G.exportScale = saved.exportScale;
     if (saved.caption) G.caption = Object.assign(G.caption, saved.caption);
   } catch (e) { console.warn('loadGridStorage error:', e); }
 }
@@ -4596,6 +4623,7 @@ function initGridMode() {
   document.getElementById('grid-gutter').value = G.gutterPct;
   document.getElementById('grid-gutter-val').textContent = G.gutterPct + '%';
   document.getElementById('grid-gutter-color').value = G.gutterColor;
+  syncGridScaleButtons();
   document.getElementById('grid-cap-on').checked = G.caption.enabled;
   document.getElementById('grid-cap-text').value = G.caption.text;
   document.getElementById('grid-cap-family').innerHTML = allFonts().map(o =>
