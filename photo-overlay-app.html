@@ -206,6 +206,11 @@
     cursor: pointer; transition: all 0.15s;
   }
   .border-side-toggle.out { border-color: var(--accent); color: #0e0e0f; background: var(--accent); }
+  .border-link-box {
+    width: 14px; height: 14px; flex-shrink: 0; margin: 0; cursor: pointer;
+    accent-color: var(--accent);
+  }
+  .border-link-all { display: flex; justify-content: flex-end; margin-bottom: 10px; }
   .btn-full { width: 100%; }
   .btn-row { display: flex; gap: 6px; }
 
@@ -651,29 +656,38 @@
           <div class="field-row" style="margin-bottom:10px;">
             <div class="drop-text" style="text-align:left;font-size:12px;">Widths are % of the final canvas width. <b>IN</b> paints over the photo's edge. <b>OUT</b> reserves a strip and shrinks the photo to fit — that's your polaroid chin. Either way the export keeps the selected aspect ratio.</div>
           </div>
+          <div class="border-link-all">
+            <input type="checkbox" class="border-link-box" id="lay-border-link-all"
+                   onchange="setBorderLinkAll(this.checked)"
+                   title="Link every edge — checks or clears all four boxes below at once">
+          </div>
           <div class="slider-row">
             <span class="slider-label">Top</span>
             <input type="range" id="lay-border-top" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('top',+this.value)">
             <span class="slider-val" id="lay-border-top-val">0%</span>
             <button class="border-side-toggle" id="lay-border-top-mode" onclick="toggleBorderSide('top')" title="IN paints over the photo edge · OUT reserves a strip and shrinks the photo">IN</button>
+            <input type="checkbox" class="border-link-box" id="lay-border-top-link" onchange="setBorderLink('top',this.checked)" title="Link this edge — linked edges take the same width and IN/OUT together">
           </div>
           <div class="slider-row">
             <span class="slider-label">Right</span>
             <input type="range" id="lay-border-right" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('right',+this.value)">
             <span class="slider-val" id="lay-border-right-val">0%</span>
             <button class="border-side-toggle" id="lay-border-right-mode" onclick="toggleBorderSide('right')" title="IN paints over the photo edge · OUT reserves a strip and shrinks the photo">IN</button>
+            <input type="checkbox" class="border-link-box" id="lay-border-right-link" onchange="setBorderLink('right',this.checked)" title="Link this edge — linked edges take the same width and IN/OUT together">
           </div>
           <div class="slider-row">
             <span class="slider-label">Bottom</span>
             <input type="range" id="lay-border-bottom" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('bottom',+this.value)">
             <span class="slider-val" id="lay-border-bottom-val">0%</span>
             <button class="border-side-toggle" id="lay-border-bottom-mode" onclick="toggleBorderSide('bottom')" title="IN paints over the photo edge · OUT reserves a strip and shrinks the photo">IN</button>
+            <input type="checkbox" class="border-link-box" id="lay-border-bottom-link" onchange="setBorderLink('bottom',this.checked)" title="Link this edge — linked edges take the same width and IN/OUT together">
           </div>
           <div class="slider-row">
             <span class="slider-label">Left</span>
             <input type="range" id="lay-border-left" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('left',+this.value)">
             <span class="slider-val" id="lay-border-left-val">0%</span>
             <button class="border-side-toggle" id="lay-border-left-mode" onclick="toggleBorderSide('left')" title="IN paints over the photo edge · OUT reserves a strip and shrinks the photo">IN</button>
+            <input type="checkbox" class="border-link-box" id="lay-border-left-link" onchange="setBorderLink('left',this.checked)" title="Link this edge — linked edges take the same width and IN/OUT together">
           </div>
           <div class="field-row" style="display:flex;gap:10px;align-items:center;margin-top:8px;">
             <div class="field-label" style="margin:0;flex:1;">Border Color</div>
@@ -763,7 +777,7 @@
           <div class="preset-list" id="layout-block-list"><div class="preset-empty">No blocks yet</div></div>
         </div>
         <div class="section" id="layout-props" style="display:none;">
-          <div class="section-label">Selected Block</div>
+          <div class="section-label" id="layout-props-label">Selected Block</div>
           <div class="btn-row" style="margin-bottom:14px;">
             <button class="btn btn-ghost btn-sm" onclick="blockOp('front')" title="Bring to front"><span class="btn-ico">⏶</span>Front</button>
             <button class="btn btn-ghost btn-sm" onclick="blockOp('back')" title="Send to back"><span class="btn-ico">⏷</span>Back</button>
@@ -868,14 +882,14 @@
               <button class="btn btn-ghost btn-sm btn-full" onclick="saveImageToLibrary()">☆ Save to Collection</button>
             </div>
           </div>
-          <div class="slider-row" style="margin-top:14px;">
+          <div class="slider-row" id="layout-props-opacity" style="margin-top:14px;">
             <span class="slider-label">Opacity</span>
             <input type="range" id="lp-opacity" min="5" max="100" oninput="setBlockProp('opacity',+this.value)">
             <span class="slider-val" id="lp-opacity-val">100%</span>
           </div>
         </div>
         <div class="section">
-          <div class="drop-text" style="text-align:left;">Double-click a text block to edit · <strong>Del</strong> removes · <strong>Esc</strong> deselects</div>
+          <div class="drop-text" style="text-align:left;">Double-click a text block to edit · <strong>⌘/Ctrl/Shift</strong>-click to multi-select · <strong>Del</strong> removes · <strong>Esc</strong> deselects</div>
         </div>
       </div>
     </div><!-- /pane-layout -->
@@ -2158,7 +2172,11 @@ const L = {
   marginPct: 5, snap: 1,
   isBlank: false, canvasColor: '#ffffff',
   border: { top: 0, right: 0, bottom: 0, left: 0, outside: { top: false, right: false, bottom: false, left: false }, color: '#ffffff' },
-  blocks: [], selectedId: null, nextId: 1,
+  // Which edges move together. Deliberately NOT inside L.border: templates
+  // deep-copy and replace that object wholesale, and a link is a panel
+  // preference, not part of the saved look.
+  borderLink: { top: false, right: false, bottom: false, left: false },
+  blocks: [], selectedId: null, selectedIds: [], nextId: 1,
   loadedFonts: [], customFonts: [],
 };
 S.layout = L;
@@ -2545,6 +2563,7 @@ function drawCroppedBackground(ctx, bitmap, crop, blurPx, darken, destW, destH) 
 //   OUT — reserves a strip; the photo area shrinks to whatever is left.
 // The photo's crop ratio is therefore DERIVED from the space the OUT edges
 // leave behind, which is what lets a polaroid chin exist without breaking 4:5.
+const BORDER_EDGES = ['top', 'right', 'bottom', 'left'];   // canonical edge order
 const BORDER_MAX_RESERVE = 0.8;   // OUT edges may never eat >80% of an axis
 const CANVAS_MAX_PX = 8000;       // sanity cap — wide OUT mattes inflate the canvas
 
@@ -2694,23 +2713,100 @@ function drawLayoutBg() {
   paintLayoutFrame(ctx, f, drawImageBgCanvas(f.photoW * k, f.photoH * k, L.blur * k), k);
 }
 
+// ── linked edges ───────────────────────────────────────────────────────────
+// An edge only gangs when its OWN box is checked, so moving an unchecked edge
+// moves that edge alone no matter what the others are set to.
+function linkedSides(side) {
+  if (!L.borderLink || !L.borderLink[side]) return [side];
+  return BORDER_EDGES.filter(s => L.borderLink[s]);
+}
+
+// Writes val to every edge `side` is ganged with; returns the sides it changed
+// so the panel can refresh exactly those rows.
+function applyBorderWidth(side, val) {
+  const sides = linkedSides(side);
+  sides.forEach(s => { L.border[s] = val; });
+  return sides;
+}
+
+// Flips side's IN/OUT, then copies that NEW mode onto the edges it's ganged
+// with — they adopt the clicked mode rather than each flipping their own.
+function applyBorderMode(side) {
+  L.border.outside = L.border.outside || {};
+  const mode = !L.border.outside[side];
+  const sides = linkedSides(side);
+  sides.forEach(s => { L.border.outside[s] = mode; });
+  return sides;
+}
+
+// A template carries the *look* only: its border replaces L.border wholesale,
+// while which edges are linked stays a panel preference the user keeps.
+function adoptTemplateBorder(border) {
+  const b = JSON.parse(JSON.stringify(border));
+  delete b.borderLink;   // never let a hand-edited template inject link state
+  L.border = b;
+}
+
+function setAllBorderLinks(on) {
+  L.borderLink = L.borderLink || {};
+  BORDER_EDGES.forEach(s => { L.borderLink[s] = !!on; });
+}
+
+// 'all' | 'none' | 'some' — drives the master box's checked/indeterminate pair.
+function borderLinkAllState() {
+  const n = BORDER_EDGES.filter(s => L.borderLink && L.borderLink[s]).length;
+  return n === BORDER_EDGES.length ? 'all' : n === 0 ? 'none' : 'some';
+}
+
 window.setBorderProp = (key, val) => {
-  L.border[key] = val;
-  if (key !== 'color') document.getElementById('lay-border-' + key + '-val').textContent = val + '%';
+  if (key === 'color') L.border.color = val;
+  else syncBorderRows(applyBorderWidth(key, val));
   saveLayoutSettings();
   applyFrameChange();   // a width can move the OUT reserve and reshape the frame
 };
 
 window.toggleBorderSide = side => {
-  L.border.outside = L.border.outside || {};
-  L.border.outside[side] = !L.border.outside[side];
+  applyBorderMode(side);
   updateBorderSideButtons();
   saveLayoutSettings();
   applyFrameChange();   // IN↔OUT changes what the frame reserves
 };
 
+window.setBorderLink = (side, on) => {
+  L.borderLink = L.borderLink || {};
+  L.borderLink[side] = !!on;
+  updateBorderLinkUI();
+  saveLayoutSettings();
+};
+
+window.setBorderLinkAll = on => {
+  setAllBorderLinks(on);
+  updateBorderLinkUI();
+  saveLayoutSettings();
+};
+
+// A linked drag moves rows the cursor never touched, so push the widths back
+// into each affected slider and readout.
+function syncBorderRows(sides) {
+  sides.forEach(s => {
+    document.getElementById('lay-border-' + s).value = L.border[s];
+    document.getElementById('lay-border-' + s + '-val').textContent = L.border[s] + '%';
+  });
+}
+
+function updateBorderLinkUI() {
+  BORDER_EDGES.forEach(s => {
+    document.getElementById('lay-border-' + s + '-link').checked =
+      !!(L.borderLink && L.borderLink[s]);
+  });
+  const state = borderLinkAllState();
+  const all = document.getElementById('lay-border-link-all');
+  all.checked = state === 'all';
+  all.indeterminate = state === 'some';
+}
+
 function updateBorderSideButtons() {
-  ['top', 'right', 'bottom', 'left'].forEach(s => {
+  BORDER_EDGES.forEach(s => {
     const btn = document.getElementById('lay-border-' + s + '-mode');
     const out = !!(L.border.outside && L.border.outside[s]);
     btn.textContent = out ? 'OUT' : 'IN';
@@ -2879,7 +2975,7 @@ window.addTextBlockUI = () => {
   if (!L.cropApplied) { toast('Load & crop an image first', 'error'); return; }
   const b = newTextBlock();
   L.blocks.push(b);
-  L.selectedId = b.id;
+  setSelection([b.id]);
   saveLayoutSettings(); renderLayoutBlocks(); updatePropsPanel();
 };
 
@@ -2897,7 +2993,7 @@ function addLogoBlock(file) {
         src, isSvg: (file.type || '').includes('svg'), opacity: 100,
         filters: { invert: 0, grayscale: 0, brightness: 100, contrast: 100 },
       });
-      L.selectedId = L.blocks[L.blocks.length - 1].id;
+      setSelection([L.blocks[L.blocks.length - 1].id]);
       saveLayoutSettings(); renderLayoutBlocks(); updatePropsPanel();
       toast('Image added', 'success');
     };
@@ -2908,6 +3004,13 @@ function addLogoBlock(file) {
 }
 
 function selBlock() { return L.blocks.find(b => b.id === L.selectedId) || null; }
+
+// The single writer for the selection, so the anchor and the set can never
+// drift apart. Omit `anchor` to anchor on the last id given.
+function setSelection(ids, anchor) {
+  L.selectedIds = ids;
+  L.selectedId = anchor !== undefined ? anchor : (ids.length ? ids[ids.length - 1] : null);
+}
 
 function blockName(b) {
   if (b.type === 'image') return (b.name || 'Image').length > 22 ? b.name.slice(0, 22) + '…' : (b.name || 'Image');
@@ -2951,7 +3054,7 @@ window.useLibraryImage = i => {
     aspect: o.aspect, src: o.src, isSvg: o.isSvg, opacity: 100,
     filters: { invert: 0, grayscale: 0, brightness: 100, contrast: 100 },
   });
-  L.selectedId = L.blocks[L.blocks.length - 1].id;
+  setSelection([L.blocks[L.blocks.length - 1].id]);
   saveLayoutSettings(); renderLayoutBlocks(); updatePropsPanel();
 };
 window.deleteLibraryImage = i => { IMGLIB.splice(i, 1); saveImgLib(); renderImgLib(); };
@@ -3078,6 +3181,7 @@ function adoptTemplateBlocks(tpl) {
   L.blocks = (tpl.blocks || []).map(b =>
     Object.assign(JSON.parse(JSON.stringify(b)), { id: 'b' + (L.nextId++) }));
   L.selectedId = null;
+  L.selectedIds = [];
 }
 
 window.useTemplate = (id, blocksOnly) => {
@@ -3090,7 +3194,7 @@ window.useTemplate = (id, blocksOnly) => {
     if (f.marginPct !== undefined) L.marginPct = f.marginPct;
     if (f.blur !== undefined) L.blur = f.blur;
     if (f.darken !== undefined) L.darken = f.darken;
-    if (f.border) L.border = JSON.parse(JSON.stringify(f.border));
+    if (f.border) adoptTemplateBorder(f.border);
     const ratioChanged = f.cropRatio && f.cropRatio !== L.cropRatio;
     if (f.cropRatio) L.cropRatio = f.cropRatio;
     adoptTemplateBlocks(tpl);
@@ -3334,7 +3438,7 @@ function renderLayoutBlocks() {
   const outW = blockSpace().W;
   L.blocks.forEach((b, zi) => {
     const el = document.createElement('div');
-    el.className = 'lblock' + (L.selectedId === b.id ? ' selected' : '');
+    el.className = 'lblock' + (L.selectedIds.includes(b.id) ? ' selected' : '');
     el.dataset.id = b.id; el.dataset.type = b.type;
     el.style.left = b.x + '%'; el.style.top = b.y + '%'; el.style.width = b.w + '%';
     el.style.zIndex = zi + 1;
@@ -3372,7 +3476,9 @@ function renderLayoutBlocks() {
         el.appendChild(img);
       }
     }
-    const handles = b.type === 'text' ? ['nw','ne','sw','se','e','w'] : ['nw','ne','sw','se'];
+    // Resize stays a single-selection act, so a multi-selection shows no handles.
+    const handles = L.selectedIds.length > 1 ? []
+      : b.type === 'text' ? ['nw','ne','sw','se','e','w'] : ['nw','ne','sw','se'];
     handles.forEach(h => {
       const hd = document.createElement('div');
       hd.className = 'lblock-handle'; hd.dataset.h = h;
@@ -3387,18 +3493,29 @@ function renderLayoutBlockList() {
   const list = document.getElementById('layout-block-list');
   if (!L.blocks.length) { list.innerHTML = '<div class="preset-empty">No blocks yet</div>'; return; }
   list.innerHTML = [...L.blocks].reverse().map(b =>
-    `<div class="preset-item" style="cursor:pointer;${L.selectedId === b.id ? 'border-color:var(--accent);' : ''}" onclick="selectLayoutBlock('${b.id}')"><span class="preset-name">${escapeHtml(blockName(b))}</span></div>`
+    `<div class="preset-item" style="cursor:pointer;${L.selectedIds.includes(b.id) ? 'border-color:var(--accent);' : ''}" onclick="selectLayoutBlock('${b.id}',event)"><span class="preset-name">${escapeHtml(blockName(b))}</span></div>`
   ).join('');
 }
-window.selectLayoutBlock = id => { L.selectedId = id; renderLayoutBlocks(); updatePropsPanel(); };
+window.selectLayoutBlock = (id, e) => {
+  const sel = toggleSelection(L.selectedIds, L.selectedId, id, !!(e && (e.metaKey || e.ctrlKey || e.shiftKey)));
+  setSelection(sel.ids, sel.anchor);
+  renderLayoutBlocks(); updatePropsPanel();
+};
 
 function updatePropsPanel() {
   const b = selBlock();
   const panel = document.getElementById('layout-props');
   panel.style.display = b ? '' : 'none';
   if (!b) return;
-  document.getElementById('layout-props-text').style.display = b.type === 'text' ? '' : 'none';
-  document.getElementById('layout-props-image').style.display = b.type === 'image' ? '' : 'none';
+  // The Front/Back/Dup/Del row acts on the whole selection, so it stays; the
+  // per-block controls hide rather than pretend to speak for several blocks.
+  const n = L.selectedIds.length, multi = n > 1;
+  document.getElementById('layout-props-label').textContent =
+    multi ? n + ' Blocks Selected' : 'Selected Block';
+  document.getElementById('layout-props-text').style.display = !multi && b.type === 'text' ? '' : 'none';
+  document.getElementById('layout-props-image').style.display = !multi && b.type === 'image' ? '' : 'none';
+  document.getElementById('layout-props-opacity').style.display = multi ? 'none' : '';
+  if (multi) return;
   document.getElementById('lp-opacity').value = b.opacity ?? 100;
   document.getElementById('lp-opacity-val').textContent = (b.opacity ?? 100) + '%';
   if (b.type === 'image') {
@@ -3491,19 +3608,69 @@ window.setBlockProp = (key, val) => {
   renderLayoutBlocks();
 };
 
-window.blockOp = op => {
-  const i = L.blocks.findIndex(b => b.id === L.selectedId);
-  if (i < 0) return;
-  const b = L.blocks[i];
-  if (op === 'del') { L.blocks.splice(i, 1); L.selectedId = null; }
-  else if (op === 'dup') {
-    const c = JSON.parse(JSON.stringify(b));
-    c.id = 'b' + (L.nextId++);
-    c.x = Math.min(90, c.x + 2); c.y = Math.min(94, c.y + 2);
-    L.blocks.push(c); L.selectedId = c.id;
+// ── Multi-select ───────────────────────────────────────────────────────────
+// L.selectedId is the ANCHOR (the last block clicked) and keeps driving the
+// props panel and inline editing; L.selectedIds is the full selection and
+// always contains the anchor. Cmd / Ctrl / Shift click toggles membership.
+function toggleSelection(ids, anchor, id, additive) {
+  if (!additive) return { ids: [id], anchor: id };
+  if (!ids.includes(id)) return { ids: ids.concat(id), anchor: id };
+  const rest = ids.filter(x => x !== id);
+  // Dropping the anchor promotes the most recently added survivor.
+  return { ids: rest, anchor: anchor === id ? (rest.length ? rest[rest.length - 1] : null) : anchor };
+}
+
+// The selection in CANVAS order — L.blocks order is paint order, so every group
+// op that reinserts blocks keeps their relative stacking.
+function selectedBlocks(blocks, ids) {
+  const set = new Set(ids);
+  return blocks.filter(b => set.has(b.id));
+}
+
+// Shrink a drag delta so the whole selection stops at the margins as one piece;
+// clamping each block on its own would deform the arrangement. A group too big
+// to fit between the margins is left free rather than jumped to an edge.
+function clampGroupDelta(items, dx, dy, m) {
+  let loX = -Infinity, hiX = Infinity, loY = -Infinity, hiY = Infinity;
+  items.forEach(it => {
+    loX = Math.max(loX, m.mX - it.x);
+    hiX = Math.min(hiX, 100 - m.mX - it.w - it.x);
+    loY = Math.max(loY, m.mY - it.y);
+    hiY = Math.min(hiY, 100 - m.mY - it.h - it.y);
+  });
+  if (loX <= hiX) dx = Math.max(loX, Math.min(hiX, dx));
+  if (loY <= hiY) dy = Math.max(loY, Math.min(hiY, dy));
+  return { dx, dy };
+}
+
+// Front/Back/Dup/Del over the whole selection. With one block selected each
+// reduces to exactly what single-select always did. Returns fresh state.
+function applyBlockOp(blocks, ids, op, nextId, anchor) {
+  const keep = anchor !== undefined ? anchor : (ids.length ? ids[ids.length - 1] : null);
+  const sel = selectedBlocks(blocks, ids);
+  if (!sel.length) return { blocks, ids, anchor: keep, nextId };
+  const rest = blocks.filter(b => !sel.includes(b));
+  if (op === 'del') return { blocks: rest, ids: [], anchor: null, nextId };
+  if (op === 'dup') {
+    const copies = sel.map(b => {
+      const c = JSON.parse(JSON.stringify(b));
+      c.id = 'b' + (nextId++);
+      c.x = Math.min(90, c.x + 2); c.y = Math.min(94, c.y + 2);
+      return c;
+    });
+    const cids = copies.map(c => c.id);
+    return { blocks: blocks.concat(copies), ids: cids, anchor: cids[cids.length - 1], nextId };
   }
-  else if (op === 'front') { L.blocks.splice(i, 1); L.blocks.push(b); }
-  else if (op === 'back')  { L.blocks.splice(i, 1); L.blocks.unshift(b); }
+  if (op === 'front') return { blocks: rest.concat(sel), ids, anchor: keep, nextId };
+  if (op === 'back')  return { blocks: sel.concat(rest), ids, anchor: keep, nextId };
+  return { blocks, ids, anchor: keep, nextId };
+}
+
+window.blockOp = op => {
+  if (!L.selectedIds.length) return;
+  const r = applyBlockOp(L.blocks, L.selectedIds, op, L.nextId, L.selectedId);
+  L.blocks = r.blocks; L.nextId = r.nextId;
+  setSelection(r.ids, r.anchor);
   saveLayoutSettings(); renderLayoutBlocks(); updatePropsPanel();
 };
 
@@ -3513,7 +3680,7 @@ function startInlineEdit(b) {
   const ed = document.getElementById('layout-editor');
   const el = ed.querySelector(`.lblock[data-id="${b.id}"]`);
   if (!el || EDITING) return;
-  L.selectedId = b.id;
+  setSelection([b.id]);
   el.style.visibility = 'hidden';
   const spec = textSpec(b, blockSpace().W);
   const m = measureWrap(spec);
@@ -3550,6 +3717,17 @@ function startInlineEdit(b) {
 
 // ── Pointer state machine: transform-only during drag, commit % on release ──
 let LDRAG = null;
+
+function markDragging(d) { d.group.forEach(it => it.el && it.el.classList.add('dragging')); }
+
+// The anchor's snapped delta, held back so the whole selection stops at the
+// margins as one piece. A lone block keeps the old behaviour exactly.
+function groupDelta(d, snap) {
+  const dx = snap.x - d.startX, dy = snap.y - d.startY;
+  if (d.group.length < 2) return { dx, dy };
+  const items = d.group.map(it => ({ x: it.startX, y: it.startY, w: it.b.w, h: blockHeightPct(it.b) }));
+  return clampGroupDelta(items, dx, dy, layoutMargins());
+}
 
 function calcResize(d, dx) {
   const startWpx = d.startW / 100 * d.frameW;
@@ -3589,33 +3767,57 @@ function initLayoutEditor() {
     const handle = e.target.closest('.lblock-handle');
     const blockEl = e.target.closest('.lblock');
     if (!blockEl) {
-      if (L.selectedId) { L.selectedId = null; renderLayoutBlocks(); updatePropsPanel(); }
+      if (L.selectedIds.length) { setSelection([]); renderLayoutBlocks(); updatePropsPanel(); }
       lastDown = { id: null, t: 0 };
       return;
     }
     const b = L.blocks.find(x => x.id === blockEl.dataset.id);
     if (!b) return;
+    const additive = e.metaKey || e.ctrlKey || e.shiftKey;
     const now = performance.now();
-    if (!handle && b.type === 'text' && lastDown.id === b.id && now - lastDown.t < 400) {
+    if (!handle && !additive && b.type === 'text' && lastDown.id === b.id && now - lastDown.t < 400) {
       lastDown = { id: null, t: 0 };
       e.preventDefault();   // stop the mousedown default from stealing focus off the textarea
       startInlineEdit(b);
       return;
     }
-    lastDown = { id: b.id, t: now };
-    if (L.selectedId !== b.id) { L.selectedId = b.id; renderLayoutBlocks(); updatePropsPanel(); }
+    // An additive click must never count toward the double-press that opens
+    // the text editor.
+    lastDown = additive ? { id: null, t: 0 } : { id: b.id, t: now };
+
+    // Plain-clicking a block that is already part of a multi-selection keeps
+    // the group intact so it can be dragged, and collapses to that one block
+    // on release instead — collapsing here would make a group undraggable.
+    let collapseTo = null;
+    if (additive) {
+      const sel = toggleSelection(L.selectedIds, L.selectedId, b.id, true);
+      const stillIn = sel.ids.includes(b.id);
+      setSelection(sel.ids, sel.anchor);
+      renderLayoutBlocks(); updatePropsPanel();
+      if (!stillIn) return;            // that click deselected it — nothing to drag
+    } else if (!L.selectedIds.includes(b.id)) {
+      setSelection([b.id]);
+      renderLayoutBlocks(); updatePropsPanel();
+    } else if (L.selectedIds.length > 1) {
+      collapseTo = b.id;
+    }
     const el = ed.querySelector(`.lblock[data-id="${b.id}"]`); // re-query: render may have replaced the node
     e.preventDefault();
     try { ed.setPointerCapture(e.pointerId); } catch {}
     LDRAG = {
       mode: handle ? 'resize' : 'move',
       h: handle ? handle.dataset.h : null,
-      b, el, moved: false,
+      b, el, moved: false, collapseTo,
+      // Everything that travels with this drag, each with its own start point.
+      group: selectedBlocks(L.blocks, L.selectedIds).map(gb => ({
+        b: gb, el: ed.querySelector(`.lblock[data-id="${gb.id}"]`),
+        startX: gb.x, startY: gb.y,
+      })),
       frameW: ed.clientWidth, frameH: ed.clientHeight,
       sx: e.clientX, sy: e.clientY,
       startX: b.x, startY: b.y, startW: b.w, startSize: b.sizePct || 0,
     };
-    if (!handle) el.classList.add('dragging');
+    if (!handle) markDragging(LDRAG);
     showMarginGuide(true);   // margin box visible for moves AND resizes
   });
 
@@ -3624,13 +3826,19 @@ function initLayoutEditor() {
     const d = LDRAG, dx = e.clientX - d.sx, dy = e.clientY - d.sy;
     if (Math.abs(dx) + Math.abs(dy) > 2) d.moved = true;
     if (d.mode === 'move') {
+      // The grabbed block snaps as it always has; the rest ride its delta.
       const snap = applyMoveConstraints(d.b,
         d.startX + dx / d.frameW * 100,
         d.startY + dy / d.frameH * 100, !e.altKey);
-      d.lastPos = snap;
-      d.el.style.transform =
-        `translate(${(snap.x - d.startX) / 100 * d.frameW}px, ${(snap.y - d.startY) / 100 * d.frameH}px)`;
-      showSnapGuides(snap.guides);
+      const g = groupDelta(d, snap);
+      d.lastDelta = g;
+      d.group.forEach(it => {
+        it.el.style.transform =
+          `translate(${g.dx / 100 * d.frameW}px, ${g.dy / 100 * d.frameH}px)`;
+      });
+      // A guide would lie if the group clamp pulled the anchor off that line.
+      const onLine = g.dx === snap.x - d.startX && g.dy === snap.y - d.startY;
+      showSnapGuides(onLine ? snap.guides : null);
     } else {
       let g = calcResize(d, dx);
       const sr = applyResizeSnap(d, g, !e.altKey);
@@ -3657,13 +3865,21 @@ function initLayoutEditor() {
     if (!LDRAG) return;
     const d = LDRAG; LDRAG = null;
     showSnapGuides(null); showMarginGuide(false);
-    if (!d.moved) { d.el.classList.remove('dragging'); return; }   // plain click: keep node alive for double-press
+    if (!d.moved) {
+      d.group.forEach(it => it.el && it.el.classList.remove('dragging'));
+      // A plain click that only meant "just this one" resolves here.
+      if (d.collapseTo) {
+        setSelection([d.collapseTo]);
+        renderLayoutBlocks(); updatePropsPanel();
+      }
+      return;   // otherwise keep the node alive for the double-press
+    }
     const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
     if (d.mode === 'move') {
-      const snap = d.lastPos || applyMoveConstraints(d.b,
+      const g = d.lastDelta || groupDelta(d, applyMoveConstraints(d.b,
         d.startX + dx / d.frameW * 100,
-        d.startY + dy / d.frameH * 100, !e.altKey);
-      d.b.x = snap.x; d.b.y = snap.y;
+        d.startY + dy / d.frameH * 100, !e.altKey));
+      d.group.forEach(it => { it.b.x = it.startX + g.dx; it.b.y = it.startY + g.dy; });
     } else {
       const g = d.lastResize || calcResize(d, dx);
       d.b.x = g.x; d.b.w = g.w;
@@ -3793,7 +4009,7 @@ function saveLayoutSettings() {
       });
       localStorage.setItem('framedata-layout', JSON.stringify({
         cropRatio: L.cropRatio, blur: L.blur, darken: L.darken,
-        marginPct: L.marginPct, snap: L.snap, border: L.border,
+        marginPct: L.marginPct, snap: L.snap, border: L.border, borderLink: L.borderLink,
         isBlank: L.isBlank, canvasColor: L.canvasColor,
         loadedFonts: L.loadedFonts, customFonts: L.customFonts,
         blocks, nextId: L.nextId,
@@ -3825,6 +4041,10 @@ function loadLayoutStorage() {
         L.border.outside = { top: v, right: v, bottom: v, left: v };
       }
     }
+    if (saved.borderLink) {
+      L.borderLink = Object.assign({ top: false, right: false, bottom: false, left: false },
+                                   saved.borderLink);
+    }
     if (saved.isBlank !== undefined) L.isBlank = !!saved.isBlank;
     if (saved.canvasColor) L.canvasColor = saved.canvasColor;
     syncLayoutPanel();
@@ -3834,12 +4054,13 @@ function loadLayoutStorage() {
 // Push L's frame/effect state out to the panel controls. Called after any
 // wholesale state change — storage restore, or applying a template.
 function syncLayoutPanel() {
-  ['top', 'right', 'bottom', 'left'].forEach(k => {
+  BORDER_EDGES.forEach(k => {
     document.getElementById('lay-border-' + k).value = L.border[k];
     document.getElementById('lay-border-' + k + '-val').textContent = L.border[k] + '%';
   });
   document.getElementById('lay-canvas-color').value = L.canvasColor;
   updateBorderSideButtons();
+  updateBorderLinkUI();
   document.getElementById('lay-border-color').value = L.border.color;
   document.getElementById('lay-blur-slider').value = L.blur;
   document.getElementById('lay-blur-val').textContent = L.blur + 'px';
@@ -3875,8 +4096,8 @@ function initLayoutMode() {
     if (MODE !== 'layout' || EDITING) return;
     const tag = (e.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
-    if ((e.key === 'Delete' || e.key === 'Backspace') && L.selectedId) { e.preventDefault(); blockOp('del'); }
-    else if (e.key === 'Escape' && L.selectedId) { L.selectedId = null; renderLayoutBlocks(); updatePropsPanel(); }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && L.selectedIds.length) { e.preventDefault(); blockOp('del'); }
+    else if (e.key === 'Escape' && L.selectedIds.length) { setSelection([]); renderLayoutBlocks(); updatePropsPanel(); }
   });
   initLayoutEditor();
   loadLayoutStorage();
