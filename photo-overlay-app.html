@@ -2194,28 +2194,49 @@ const CURATED_FONTS = [
   { f: 'Bebas Neue', w: [400] },
   { f: 'Six Caps', w: [400] },
   { f: 'Abril Fatface', w: [400] },
-  { f: 'Oswald', w: [400, 500, 700] },
+  { f: 'Oswald', w: [200, 300, 400, 500, 600, 700], variable: true },
   { f: 'Fjalla One', w: [400] },
-  { f: 'Archivo Narrow', w: [400, 700] },
-  { f: 'Montserrat', w: [300, 400, 700, 900] },
-  { f: 'Syne', w: [400, 700, 800] },
-  { f: 'Space Grotesk', w: [400, 500, 700] },
-  { f: 'Work Sans', w: [300, 400, 600, 800] },
-  { f: 'Inter', w: [400, 600, 800] },
-  { f: 'Unbounded', w: [400, 700, 900] },
-  { f: 'Playfair Display', w: [400, 700, 900] },
+  { f: 'Archivo Narrow', w: [400, 500, 600, 700], variable: true },
+  { f: 'Montserrat', w: [100, 200, 300, 400, 500, 600, 700, 800, 900], variable: true },
+  { f: 'Syne', w: [400, 500, 600, 700, 800], variable: true },
+  { f: 'Space Grotesk', w: [300, 400, 500, 600, 700], variable: true },
+  { f: 'Work Sans', w: [100, 200, 300, 400, 500, 600, 700, 800, 900], variable: true },
+  { f: 'Inter', w: [100, 200, 300, 400, 500, 600, 700, 800, 900], variable: true },
+  { f: 'Unbounded', w: [200, 300, 400, 500, 600, 700, 800, 900], variable: true },
+  { f: 'Playfair Display', w: [400, 500, 600, 700, 800, 900], variable: true },
   { f: 'DM Serif Display', w: [400] },
   { f: 'Instrument Serif', w: [400] },
-  { f: 'Libre Baskerville', w: [400, 700] },
-  { f: 'EB Garamond', w: [400, 600, 800] },
-  { f: 'Cormorant Garamond', w: [400, 600, 700] },
-  { f: 'Lora', w: [400, 600, 700] },
+  { f: 'Libre Baskerville', w: [400, 500, 600, 700], variable: true },
+  { f: 'EB Garamond', w: [400, 500, 600, 700, 800], variable: true },
+  { f: 'Cormorant Garamond', w: [300, 400, 500, 600, 700], variable: true },
+  { f: 'Lora', w: [400, 500, 600, 700], variable: true },
   { f: 'Crimson Text', w: [400, 600, 700] },
   { f: 'Italiana', w: [400] },
-  { f: 'Cinzel', w: [400, 700, 900] },
+  { f: 'Cinzel', w: [400, 500, 600, 700, 800, 900], variable: true },
   { f: 'Marcellus', w: [400] },
   { f: 'DM Mono', w: [300, 400, 500] },
 ];
+const FONT_WEIGHT_STEPS = [100, 200, 300, 400, 500, 600, 700, 800, 900];
+
+// Google serves a VARIABLE family as one woff2 per unicode subset whatever
+// weights you name, so asking for the whole axis costs no extra bytes — but
+// the range must be the font's own axis: wght@100..900 on Oswald (200–700)
+// is an HTTP 400. A static family lists its weights instead.
+function googleFontCssUrl(spec) {
+  if (!spec || spec.sys || !spec.w || !spec.w.length) return null;
+  const w = spec.variable
+    ? `${spec.w[0]}..${spec.w[spec.w.length - 1]}`
+    : spec.w.join(';');
+  return `https://fonts.googleapis.com/css2?family=${spec.f.replace(/ /g, '+')}:wght@${w}&display=swap`;
+}
+
+// Keep the weight across a family change when the new family has it.
+function pickFontWeight(spec, want) {
+  const w = (spec && spec.w && spec.w.length) ? spec.w : [400];
+  if (w.includes(want)) return want;
+  return w.includes(700) ? 700 : w[0];
+}
+
 function allFonts() { return CURATED_FONTS.concat(L.customFonts); }
 function fontSpec(family) { return allFonts().find(x => x.f === family); }
 
@@ -2227,7 +2248,7 @@ function loadFontCss(family) {
   FONT_CSS_PROMISES[family] = new Promise(res => {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = `https://fonts.googleapis.com/css2?family=${family.replace(/ /g, '+')}:wght@${spec.w.join(';')}&display=swap`;
+    link.href = googleFontCssUrl(spec);
     link.onload = () => res(true);
     link.onerror = () => res(false);
     document.head.appendChild(link);
@@ -2301,31 +2322,37 @@ function parseFontInput(input) {
   return input;
 }
 
-// Discovery fetch: probe css2 (variable range → common pair → plain 400),
-// inject the returned CSS, and read the actually-available weights out of it.
-// The discovered weight list is stored, so later sessions reload the font
-// through the ordinary loadFontCss <link> path with known-valid weights.
+// Does css2 serve this exact spec? A weight the family doesn't have is a 400.
+async function googleFontCssOk(spec) {
+  try {
+    const res = await fetch(`https://fonts.googleapis.com/css2?family=${spec}&display=swap`);
+    return res.ok;
+  } catch { return false; }
+}
+
+// Discovery: ask css2 for each of the nine steps in parallel and keep the ones
+// it serves, then one more probe to learn whether the span is a variable axis.
+// Reading weights back out of the CSS used to under-report badly — a family
+// without a full 100–900 axis failed the probe and fell back to just [400,700].
 async function fetchGoogleFont(family) {
   const slug = family.replace(/ /g, '+');
-  const tries = [`${slug}:ital,wght@0,100..900`, `${slug}:wght@400;700`, slug];
-  for (const t of tries) {
-    try {
-      const res = await fetch(`https://fonts.googleapis.com/css2?family=${t}&display=swap`);
-      if (!res.ok) continue;
-      const css = await res.text();
-      const st = document.createElement('style');
-      st.dataset.customFont = family;
-      st.textContent = css;
-      document.head.appendChild(st);
-      let weights = [...new Set([...css.matchAll(/font-weight:\s*(\d+)(?:\s+(\d+))?/g)].flatMap(m =>
-        m[2] ? [100, 300, 400, 500, 700, 900].filter(w => w >= +m[1] && w <= +m[2]) : [+m[1]]
-      ))].sort((a, b) => a - b);
-      if (!weights.length) weights = [400];
-      await document.fonts.load(`${weights.includes(400) ? 400 : weights[0]} 16px "${family}"`).catch(() => {});
-      return { f: family, w: weights, custom: true };
-    } catch {}
-  }
-  return null;
+  const found = await Promise.all(
+    FONT_WEIGHT_STEPS.map(async w => (await googleFontCssOk(`${slug}:wght@${w}`)) ? w : 0));
+  const w = found.filter(Boolean);
+  if (!w.length) return null;   // no such family on Google Fonts
+  const variable = w.length > 1 &&
+    await googleFontCssOk(`${slug}:wght@${w[0]}..${w[w.length - 1]}`);
+  const spec = { f: family, w, variable, custom: true };
+  try {
+    const res = await fetch(googleFontCssUrl(spec));
+    if (!res.ok) return null;
+    const st = document.createElement('style');
+    st.dataset.customFont = family;
+    st.textContent = await res.text();
+    document.head.appendChild(st);
+    await document.fonts.load(`${pickFontWeight(spec, 400)} 16px "${family}"`).catch(() => {});
+    return spec;
+  } catch { return null; }
 }
 
 window.addCustomFont = async () => {
@@ -3588,7 +3615,7 @@ window.setBlockProp = (key, val) => {
   if (key === 'family') {
     b.font.family = val;
     const spec = fontSpec(val) || { w: [400] };
-    if (!spec.w.includes(b.font.weight)) b.font.weight = spec.w.includes(700) ? 700 : spec.w[0];
+    b.font.weight = pickFontWeight(spec, b.font.weight);
     ensureFontLoaded(b.font.family, b.font.weight).then(ok => {
       if (!ok) toast(`Couldn't load ${val} — using fallback`, 'error');
       renderLayoutBlocks();
