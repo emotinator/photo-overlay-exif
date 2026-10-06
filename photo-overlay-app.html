@@ -206,6 +206,11 @@
     cursor: pointer; transition: all 0.15s;
   }
   .border-side-toggle.out { border-color: var(--accent); color: #0e0e0f; background: var(--accent); }
+  .border-link-box {
+    width: 14px; height: 14px; flex-shrink: 0; margin: 0; cursor: pointer;
+    accent-color: var(--accent);
+  }
+  .border-link-all { display: flex; justify-content: flex-end; margin-bottom: 10px; }
   .btn-full { width: 100%; }
   .btn-row { display: flex; gap: 6px; }
 
@@ -651,29 +656,38 @@
           <div class="field-row" style="margin-bottom:10px;">
             <div class="drop-text" style="text-align:left;font-size:12px;">Widths are % of the final canvas width. <b>IN</b> paints over the photo's edge. <b>OUT</b> reserves a strip and shrinks the photo to fit — that's your polaroid chin. Either way the export keeps the selected aspect ratio.</div>
           </div>
+          <div class="border-link-all">
+            <input type="checkbox" class="border-link-box" id="lay-border-link-all"
+                   onchange="setBorderLinkAll(this.checked)"
+                   title="Link every edge — checks or clears all four boxes below at once">
+          </div>
           <div class="slider-row">
             <span class="slider-label">Top</span>
             <input type="range" id="lay-border-top" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('top',+this.value)">
             <span class="slider-val" id="lay-border-top-val">0%</span>
             <button class="border-side-toggle" id="lay-border-top-mode" onclick="toggleBorderSide('top')" title="IN paints over the photo edge · OUT reserves a strip and shrinks the photo">IN</button>
+            <input type="checkbox" class="border-link-box" id="lay-border-top-link" onchange="setBorderLink('top',this.checked)" title="Link this edge — linked edges take the same width and IN/OUT together">
           </div>
           <div class="slider-row">
             <span class="slider-label">Right</span>
             <input type="range" id="lay-border-right" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('right',+this.value)">
             <span class="slider-val" id="lay-border-right-val">0%</span>
             <button class="border-side-toggle" id="lay-border-right-mode" onclick="toggleBorderSide('right')" title="IN paints over the photo edge · OUT reserves a strip and shrinks the photo">IN</button>
+            <input type="checkbox" class="border-link-box" id="lay-border-right-link" onchange="setBorderLink('right',this.checked)" title="Link this edge — linked edges take the same width and IN/OUT together">
           </div>
           <div class="slider-row">
             <span class="slider-label">Bottom</span>
             <input type="range" id="lay-border-bottom" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('bottom',+this.value)">
             <span class="slider-val" id="lay-border-bottom-val">0%</span>
             <button class="border-side-toggle" id="lay-border-bottom-mode" onclick="toggleBorderSide('bottom')" title="IN paints over the photo edge · OUT reserves a strip and shrinks the photo">IN</button>
+            <input type="checkbox" class="border-link-box" id="lay-border-bottom-link" onchange="setBorderLink('bottom',this.checked)" title="Link this edge — linked edges take the same width and IN/OUT together">
           </div>
           <div class="slider-row">
             <span class="slider-label">Left</span>
             <input type="range" id="lay-border-left" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('left',+this.value)">
             <span class="slider-val" id="lay-border-left-val">0%</span>
             <button class="border-side-toggle" id="lay-border-left-mode" onclick="toggleBorderSide('left')" title="IN paints over the photo edge · OUT reserves a strip and shrinks the photo">IN</button>
+            <input type="checkbox" class="border-link-box" id="lay-border-left-link" onchange="setBorderLink('left',this.checked)" title="Link this edge — linked edges take the same width and IN/OUT together">
           </div>
           <div class="field-row" style="display:flex;gap:10px;align-items:center;margin-top:8px;">
             <div class="field-label" style="margin:0;flex:1;">Border Color</div>
@@ -2158,6 +2172,10 @@ const L = {
   marginPct: 5, snap: 1,
   isBlank: false, canvasColor: '#ffffff',
   border: { top: 0, right: 0, bottom: 0, left: 0, outside: { top: false, right: false, bottom: false, left: false }, color: '#ffffff' },
+  // Which edges move together. Deliberately NOT inside L.border: templates
+  // deep-copy and replace that object wholesale, and a link is a panel
+  // preference, not part of the saved look.
+  borderLink: { top: false, right: false, bottom: false, left: false },
   blocks: [], selectedId: null, nextId: 1,
   loadedFonts: [], customFonts: [],
 };
@@ -2545,6 +2563,7 @@ function drawCroppedBackground(ctx, bitmap, crop, blurPx, darken, destW, destH) 
 //   OUT — reserves a strip; the photo area shrinks to whatever is left.
 // The photo's crop ratio is therefore DERIVED from the space the OUT edges
 // leave behind, which is what lets a polaroid chin exist without breaking 4:5.
+const BORDER_EDGES = ['top', 'right', 'bottom', 'left'];   // canonical edge order
 const BORDER_MAX_RESERVE = 0.8;   // OUT edges may never eat >80% of an axis
 const CANVAS_MAX_PX = 8000;       // sanity cap — wide OUT mattes inflate the canvas
 
@@ -2694,23 +2713,100 @@ function drawLayoutBg() {
   paintLayoutFrame(ctx, f, drawImageBgCanvas(f.photoW * k, f.photoH * k, L.blur * k), k);
 }
 
+// ── linked edges ───────────────────────────────────────────────────────────
+// An edge only gangs when its OWN box is checked, so moving an unchecked edge
+// moves that edge alone no matter what the others are set to.
+function linkedSides(side) {
+  if (!L.borderLink || !L.borderLink[side]) return [side];
+  return BORDER_EDGES.filter(s => L.borderLink[s]);
+}
+
+// Writes val to every edge `side` is ganged with; returns the sides it changed
+// so the panel can refresh exactly those rows.
+function applyBorderWidth(side, val) {
+  const sides = linkedSides(side);
+  sides.forEach(s => { L.border[s] = val; });
+  return sides;
+}
+
+// Flips side's IN/OUT, then copies that NEW mode onto the edges it's ganged
+// with — they adopt the clicked mode rather than each flipping their own.
+function applyBorderMode(side) {
+  L.border.outside = L.border.outside || {};
+  const mode = !L.border.outside[side];
+  const sides = linkedSides(side);
+  sides.forEach(s => { L.border.outside[s] = mode; });
+  return sides;
+}
+
+// A template carries the *look* only: its border replaces L.border wholesale,
+// while which edges are linked stays a panel preference the user keeps.
+function adoptTemplateBorder(border) {
+  const b = JSON.parse(JSON.stringify(border));
+  delete b.borderLink;   // never let a hand-edited template inject link state
+  L.border = b;
+}
+
+function setAllBorderLinks(on) {
+  L.borderLink = L.borderLink || {};
+  BORDER_EDGES.forEach(s => { L.borderLink[s] = !!on; });
+}
+
+// 'all' | 'none' | 'some' — drives the master box's checked/indeterminate pair.
+function borderLinkAllState() {
+  const n = BORDER_EDGES.filter(s => L.borderLink && L.borderLink[s]).length;
+  return n === BORDER_EDGES.length ? 'all' : n === 0 ? 'none' : 'some';
+}
+
 window.setBorderProp = (key, val) => {
-  L.border[key] = val;
-  if (key !== 'color') document.getElementById('lay-border-' + key + '-val').textContent = val + '%';
+  if (key === 'color') L.border.color = val;
+  else syncBorderRows(applyBorderWidth(key, val));
   saveLayoutSettings();
   applyFrameChange();   // a width can move the OUT reserve and reshape the frame
 };
 
 window.toggleBorderSide = side => {
-  L.border.outside = L.border.outside || {};
-  L.border.outside[side] = !L.border.outside[side];
+  applyBorderMode(side);
   updateBorderSideButtons();
   saveLayoutSettings();
   applyFrameChange();   // IN↔OUT changes what the frame reserves
 };
 
+window.setBorderLink = (side, on) => {
+  L.borderLink = L.borderLink || {};
+  L.borderLink[side] = !!on;
+  updateBorderLinkUI();
+  saveLayoutSettings();
+};
+
+window.setBorderLinkAll = on => {
+  setAllBorderLinks(on);
+  updateBorderLinkUI();
+  saveLayoutSettings();
+};
+
+// A linked drag moves rows the cursor never touched, so push the widths back
+// into each affected slider and readout.
+function syncBorderRows(sides) {
+  sides.forEach(s => {
+    document.getElementById('lay-border-' + s).value = L.border[s];
+    document.getElementById('lay-border-' + s + '-val').textContent = L.border[s] + '%';
+  });
+}
+
+function updateBorderLinkUI() {
+  BORDER_EDGES.forEach(s => {
+    document.getElementById('lay-border-' + s + '-link').checked =
+      !!(L.borderLink && L.borderLink[s]);
+  });
+  const state = borderLinkAllState();
+  const all = document.getElementById('lay-border-link-all');
+  all.checked = state === 'all';
+  all.indeterminate = state === 'some';
+}
+
 function updateBorderSideButtons() {
-  ['top', 'right', 'bottom', 'left'].forEach(s => {
+  BORDER_EDGES.forEach(s => {
     const btn = document.getElementById('lay-border-' + s + '-mode');
     const out = !!(L.border.outside && L.border.outside[s]);
     btn.textContent = out ? 'OUT' : 'IN';
@@ -3090,7 +3186,7 @@ window.useTemplate = (id, blocksOnly) => {
     if (f.marginPct !== undefined) L.marginPct = f.marginPct;
     if (f.blur !== undefined) L.blur = f.blur;
     if (f.darken !== undefined) L.darken = f.darken;
-    if (f.border) L.border = JSON.parse(JSON.stringify(f.border));
+    if (f.border) adoptTemplateBorder(f.border);
     const ratioChanged = f.cropRatio && f.cropRatio !== L.cropRatio;
     if (f.cropRatio) L.cropRatio = f.cropRatio;
     adoptTemplateBlocks(tpl);
@@ -3793,7 +3889,7 @@ function saveLayoutSettings() {
       });
       localStorage.setItem('framedata-layout', JSON.stringify({
         cropRatio: L.cropRatio, blur: L.blur, darken: L.darken,
-        marginPct: L.marginPct, snap: L.snap, border: L.border,
+        marginPct: L.marginPct, snap: L.snap, border: L.border, borderLink: L.borderLink,
         isBlank: L.isBlank, canvasColor: L.canvasColor,
         loadedFonts: L.loadedFonts, customFonts: L.customFonts,
         blocks, nextId: L.nextId,
@@ -3825,6 +3921,10 @@ function loadLayoutStorage() {
         L.border.outside = { top: v, right: v, bottom: v, left: v };
       }
     }
+    if (saved.borderLink) {
+      L.borderLink = Object.assign({ top: false, right: false, bottom: false, left: false },
+                                   saved.borderLink);
+    }
     if (saved.isBlank !== undefined) L.isBlank = !!saved.isBlank;
     if (saved.canvasColor) L.canvasColor = saved.canvasColor;
     syncLayoutPanel();
@@ -3834,12 +3934,13 @@ function loadLayoutStorage() {
 // Push L's frame/effect state out to the panel controls. Called after any
 // wholesale state change — storage restore, or applying a template.
 function syncLayoutPanel() {
-  ['top', 'right', 'bottom', 'left'].forEach(k => {
+  BORDER_EDGES.forEach(k => {
     document.getElementById('lay-border-' + k).value = L.border[k];
     document.getElementById('lay-border-' + k + '-val').textContent = L.border[k] + '%';
   });
   document.getElementById('lay-canvas-color').value = L.canvasColor;
   updateBorderSideButtons();
+  updateBorderLinkUI();
   document.getElementById('lay-border-color').value = L.border.color;
   document.getElementById('lay-blur-slider').value = L.blur;
   document.getElementById('lay-blur-val').textContent = L.blur + 'px';
