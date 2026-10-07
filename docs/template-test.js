@@ -26,7 +26,7 @@ function extractConst(name) {
   return m[0];
 }
 
-const src = ['TEMPLATE_FORMAT', 'TPL_MAX_BLOCKS', 'TPL_IMG_MAX', 'TPL_SRC_RE']
+const src = ['TEMPLATE_FORMAT', 'TPL_MAX_BLOCKS', 'TPL_IMG_MAX', 'TPL_SRC_RE', 'BORDER_MAX_PCT']
   .map(extractConst).join('\n') + '\n' + NEEDED.map(extract).join('\n\n');
 
 const L = { blocks: [], nextId: 1 };
@@ -188,8 +188,13 @@ console.log('\n7. Sanitizer clamps hostile values');
   const f = api.sanitizeTemplateFrame({ cropRatio: 'evil', marginPct: 1e6, blur: -5, darken: 999,
     border: { top: 900, color: 'url(evil)', outside: { top: 'yes' } } });
   ok('bad ratio falls back to 4:5', f.cropRatio === '4:5');
-  ok('border width clamped to 25', f.border.top === 25, String(f.border.top));
+  ok('border width clamped to the slider maximum', f.border.top === 40, String(f.border.top));
   ok('border color rejected', f.border.color === '#ffffff');
+  const wide = api.sanitizeTemplateFrame({ cropRatio: '4:5',
+    border: { bottom: 40, left: 32.5, outside: { bottom: true } } });
+  ok('a 40% polaroid chin survives the round trip', wide.border.bottom === 40,
+    String(wide.border.bottom));
+  ok('a half-step width is kept exactly', wide.border.left === 32.5, String(wide.border.left));
   ok('outside coerced to boolean', f.border.outside.top === true);
   ok('margin clamped', f.marginPct === 50, String(f.marginPct));
   ok('darken clamped', f.darken === 100, String(f.darken));
