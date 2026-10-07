@@ -663,28 +663,28 @@
           </div>
           <div class="slider-row">
             <span class="slider-label">Top</span>
-            <input type="range" id="lay-border-top" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('top',+this.value)">
+            <input type="range" id="lay-border-top" min="0" max="40" step="0.5" value="0" oninput="setBorderProp('top',+this.value)">
             <span class="slider-val" id="lay-border-top-val">0%</span>
             <button class="border-side-toggle" id="lay-border-top-mode" onclick="toggleBorderSide('top')" title="IN paints over the photo edge · OUT reserves a strip and shrinks the photo">IN</button>
             <input type="checkbox" class="border-link-box" id="lay-border-top-link" onchange="setBorderLink('top',this.checked)" title="Link this edge — linked edges take the same width and IN/OUT together">
           </div>
           <div class="slider-row">
             <span class="slider-label">Right</span>
-            <input type="range" id="lay-border-right" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('right',+this.value)">
+            <input type="range" id="lay-border-right" min="0" max="40" step="0.5" value="0" oninput="setBorderProp('right',+this.value)">
             <span class="slider-val" id="lay-border-right-val">0%</span>
             <button class="border-side-toggle" id="lay-border-right-mode" onclick="toggleBorderSide('right')" title="IN paints over the photo edge · OUT reserves a strip and shrinks the photo">IN</button>
             <input type="checkbox" class="border-link-box" id="lay-border-right-link" onchange="setBorderLink('right',this.checked)" title="Link this edge — linked edges take the same width and IN/OUT together">
           </div>
           <div class="slider-row">
             <span class="slider-label">Bottom</span>
-            <input type="range" id="lay-border-bottom" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('bottom',+this.value)">
+            <input type="range" id="lay-border-bottom" min="0" max="40" step="0.5" value="0" oninput="setBorderProp('bottom',+this.value)">
             <span class="slider-val" id="lay-border-bottom-val">0%</span>
             <button class="border-side-toggle" id="lay-border-bottom-mode" onclick="toggleBorderSide('bottom')" title="IN paints over the photo edge · OUT reserves a strip and shrinks the photo">IN</button>
             <input type="checkbox" class="border-link-box" id="lay-border-bottom-link" onchange="setBorderLink('bottom',this.checked)" title="Link this edge — linked edges take the same width and IN/OUT together">
           </div>
           <div class="slider-row">
             <span class="slider-label">Left</span>
-            <input type="range" id="lay-border-left" min="0" max="25" step="0.5" value="0" oninput="setBorderProp('left',+this.value)">
+            <input type="range" id="lay-border-left" min="0" max="40" step="0.5" value="0" oninput="setBorderProp('left',+this.value)">
             <span class="slider-val" id="lay-border-left-val">0%</span>
             <button class="border-side-toggle" id="lay-border-left-mode" onclick="toggleBorderSide('left')" title="IN paints over the photo edge · OUT reserves a strip and shrinks the photo">IN</button>
             <input type="checkbox" class="border-link-box" id="lay-border-left-link" onchange="setBorderLink('left',this.checked)" title="Link this edge — linked edges take the same width and IN/OUT together">
@@ -2591,6 +2591,7 @@ function drawCroppedBackground(ctx, bitmap, crop, blurPx, darken, destW, destH) 
 // The photo's crop ratio is therefore DERIVED from the space the OUT edges
 // leave behind, which is what lets a polaroid chin exist without breaking 4:5.
 const BORDER_EDGES = ['top', 'right', 'bottom', 'left'];   // canonical edge order
+const BORDER_MAX_PCT = 40;        // slider ceiling — wide enough for a polaroid chin
 const BORDER_MAX_RESERVE = 0.8;   // OUT edges may never eat >80% of an axis
 const CANVAS_MAX_PX = 8000;       // sanity cap — wide OUT mattes inflate the canvas
 
@@ -3371,7 +3372,7 @@ function sanitizeTemplateBlock(b) {
 function sanitizeTemplateFrame(f) {
   if (!f || typeof f !== 'object') return null;
   const b = f.border || {}, o = b.outside || {};
-  const edge = s => tplNum(b[s], 0, 0, 25);
+  const edge = s => tplNum(b[s], 0, 0, BORDER_MAX_PCT);
   return {
     cropRatio: ['4:5', '1:1', 'original'].includes(f.cropRatio) ? f.cropRatio : '4:5',
     border: {

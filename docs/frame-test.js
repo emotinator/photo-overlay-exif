@@ -176,5 +176,47 @@ console.log('\n9. v2→v3 block rebase');
     `y=${lay4.blocks[0].y.toFixed(3)} vs ${(0.45 / kY * 100).toFixed(3)}`);
 }
 
+console.log('\n9. Wide mattes — the 40% range the sliders now offer');
+{
+  // The four sliders are the only thing that bounds a matte, so the bound is
+  // worth asserting on the markup itself.
+  const maxes = [...html.matchAll(/id="lay-border-(top|right|bottom|left)"[^>]*max="([^"]+)"/g)]
+    .map(m => `${m[1]}:${m[2]}`);
+  ok('all four edge sliders reach 40%',
+    maxes.length === 4 && maxes.every(x => x.endsWith(':40')), maxes.join(' '));
+
+  // Geometry is value-agnostic, so these guard the claim that widening the
+  // slider needed no change to the reserve math.
+  for (const ratio of ['4:5', '1:1']) {
+    const R = ratio === '1:1' ? 1 : 4 / 5;
+    const f = setup({ ratio, border: { bottom: 40 }, outside: { bottom: true } });
+    ok(`${ratio} 40% chin: canvas still holds the ratio`,
+      near(f.canvasW / f.canvasH, R, 0.002), `ratio ${(f.canvasW / f.canvasH).toFixed(4)}`);
+    ok(`${ratio} 40% chin is exactly 40% of canvas width`,
+      near(f.btm, 0.4 * f.canvasW, 1), `${f.btm} vs ${(0.4 * f.canvasW).toFixed(1)}`);
+    ok(`${ratio} 40% chin leaves a real photo box`, f.photoH > 0 && f.photoW > 0,
+      `${f.photoW}x${f.photoH}`);
+  }
+
+  // 40 on every edge asks for more than an axis can give; the reserve must
+  // scale proportionally rather than collapse the photo.
+  const all = setup({ ratio: '1:1', border: { top: 40, right: 40, bottom: 40, left: 40 },
+    outside: { top: 1, right: 1, bottom: 1, left: 1 } });
+  ok('all four OUT at 40% still leaves a photo box',
+    all.photoW > 0 && all.photoH > 0, `${all.photoW}x${all.photoH}`);
+  ok('all four OUT at 40% keeps the canvas square',
+    near(all.canvasW / all.canvasH, 1, 0.002), `${all.canvasW}x${all.canvasH}`);
+  ok('opposite edges stay equal under the proportional clamp',
+    near(all.l, all.r, 1) && near(all.t, all.btm, 1),
+    `l=${all.l} r=${all.r} t=${all.t} b=${all.btm}`);
+
+  // Wide OUT edges inflate the canvas; the sanity cap must still hold.
+  const big = setup({ ratio: '4:5', src: [8000, 6000],
+    border: { top: 40, bottom: 40 }, outside: { top: 1, bottom: 1 } });
+  ok('canvas stays within CANVAS_MAX_PX at the widest matte',
+    big.canvasW <= CANVAS_MAX_PX && big.canvasH <= CANVAS_MAX_PX,
+    `${big.canvasW}x${big.canvasH}`);
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
